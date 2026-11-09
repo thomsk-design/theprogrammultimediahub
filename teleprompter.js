@@ -9,22 +9,58 @@
   } catch {}
   function open(script) {
     if (document.querySelector('.prompter')) return;
+    const emphasisKey = storageKey + '-emphasis-' + (script ? script.id : 'draft');
+    let ranges = [];
+    try {
+      const saved = JSON.parse(localStorage.getItem(emphasisKey) || '{}');
+      if (saved.text === (script ? script.body : draft) && Array.isArray(saved.ranges)) ranges = saved.ranges.filter(r => Array.isArray(r) && Number.isInteger(r[0]) && Number.isInteger(r[1]) && r[0] >= 0 && r[1] > r[0] && r[1] <= saved.text.length);
+    } catch {}
     const dialog = document.createElement('dialog');
     dialog.className = 'prompter';
     dialog.setAttribute('aria-labelledby', 'prompter-title');
     dialog.innerHTML = `<header class="prompter-header"><div><div class="eyebrow">YOUR WORDS. YOUR PACE.</div><h2 id="prompter-title">Teleprompter</h2></div><button class="btn" data-p-close>Close ×</button></header>
-      <section class="prompter-editor"><label for="prompter-input">Add your script</label><p class="small muted">Paste your words below. Keep line breaks and pause cues wherever you need a breath.</p><textarea id="prompter-input" placeholder="Paste or type your script here…"></textarea><p class="small muted" data-p-saved>Saved in this browser only.</p><button class="btn primary" data-p-read>Open reader →</button></section>
-      <section class="prompter-reader" hidden><div class="prompter-controls"><button class="btn primary" data-p-play>Start</button><button class="btn" data-p-restart>Restart</button><button class="btn" data-p-edit>Edit script</button><label>Speed <input type="range" min="10" max="120" step="5" data-p-speed aria-label="Scroll speed"><output data-p-speed-label></output></label><label>Text size <input type="range" min="24" max="80" step="2" data-p-size aria-label="Text size"><output data-p-size-label></output></label></div><p class="prompter-help">Space: pause / resume · ← / →: pace · ↑ / ↓: move back / forward · Home: restart · Esc: close</p><div class="prompter-viewport" tabindex="0" aria-label="Script reader. Use Space to pause or resume."><div class="prompter-text"></div></div><div class="prompter-status" role="status" aria-live="polite">Ready when you are.</div></section>`;
+      <section class="prompter-editor"><label for="prompter-input">Add your script</label><p class="small muted">Paste your words below. Keep line breaks and pause cues wherever you need a breath.</p><textarea id="prompter-input" placeholder="Paste or type your script here…"></textarea><div class="prompter-emphasis-tools"><button class="btn" data-p-highlight>Highlight selected words</button><button class="btn" data-p-clear>Clear emphasis</button><span class="small muted">Select words above, then highlight them for emphasis.</span></div><p class="small muted" data-p-saved>Saved in this browser only.</p><button class="btn primary" data-p-read>Open reader →</button></section>
+      <section class="prompter-reader" hidden><div class="prompter-controls"><button class="btn primary" data-p-play>Start</button><button class="btn" data-p-restart>Restart</button><button class="btn" data-p-edit>Edit script</button><button class="btn" data-p-reader-highlight>Highlight selection</button><button class="btn" data-p-reader-clear>Clear emphasis</button><label>Speed <input type="range" min="10" max="120" step="5" data-p-speed aria-label="Scroll speed"><output data-p-speed-label></output></label><label>Text size <input type="range" min="24" max="80" step="2" data-p-size aria-label="Text size"><output data-p-size-label></output></label></div><p class="prompter-help">Space: pause / resume · ← / →: pace · ↑ / ↓: move back / forward · Home: restart · Esc: close</p><div class="prompter-viewport" tabindex="0" aria-label="Script reader. Use Space to pause or resume."><div class="prompter-text"></div></div><div class="prompter-status" role="status" aria-live="polite">Ready when you are.</div></section>`;
     document.body.append(dialog);
     const q = selector => dialog.querySelector(selector);
     const input = q('textarea'), viewport = q('.prompter-viewport');
     const editor = q('.prompter-editor'), reader = q('.prompter-reader');
     let playing = false, frame = 0, last = null, position = 0;
     input.value = script ? script.body : draft;
+    let previousText = input.value;
+    function renderText() {
+      const target = q('.prompter-text');
+      target.replaceChildren();
+      let offset = 0;
+      for (const [start, end] of ranges) {
+        target.append(document.createTextNode(input.value.slice(offset, start)));
+        const mark = document.createElement('mark');
+        mark.textContent = input.value.slice(start, end);
+        target.append(mark);
+        offset = end;
+      }
+      target.append(document.createTextNode(input.value.slice(offset)));
+    }
+    function highlight(start, end) {
+      if (start === end) return false;
+      ranges.push([start, end]);
+      ranges.sort((a, b) => a[0] - b[0]);
+      ranges = ranges.reduce((merged, range) => {
+        const last = merged[merged.length - 1];
+        if (last && range[0] <= last[1]) last[1] = Math.max(last[1], range[1]);
+        else merged.push([...range]);
+        return merged;
+      }, []);
+      renderText();
+      persist();
+      return true;
+    }
+    function clearEmphasis() { ranges = []; renderText(); persist(); }
     function persist() {
       draft = input.value;
       try {
         localStorage.setItem(storageKey, JSON.stringify({text: draft, speed, size}));
+        localStorage.setItem(emphasisKey, JSON.stringify({text: input.value, ranges}));
         q('[data-p-saved]').textContent = 'Saved in this browser only.';
       } catch { q('[data-p-saved]').textContent = 'Browser storage unavailable. Keep a copy of your script before closing.'; }
     }
@@ -75,13 +111,53 @@
     function read() {
       if (!input.value.trim()) { input.focus(); input.setCustomValidity('Add a script first.'); input.reportValidity(); return; }
       persist();
-      q('.prompter-text').textContent = input.value;
+      renderText();
       editor.hidden = true;
       reader.hidden = false;
       restart();
       viewport.focus();
     }
-    input.oninput = () => { input.setCustomValidity(''); persist(); };
+    input.oninput = () => {
+      input.setCustomValidity('');
+      // Keep marks outside an edit and discard only marks whose words changed.
+      let prefix = 0, suffix = 0;
+      while (prefix < previousText.length && prefix < input.value.length && previousText[prefix] === input.value[prefix]) prefix++;
+      while (suffix < previousText.length - prefix && suffix < input.value.length - prefix && previousText[previousText.length - suffix - 1] === input.value[input.value.length - suffix - 1]) suffix++;
+      const delta = input.value.length - previousText.length;
+      ranges = ranges.flatMap(([start, end]) => end <= prefix ? [[start, end]] : start >= previousText.length - suffix ? [[start + delta, end + delta]] : []);
+      previousText = input.value;
+      persist();
+    };
+    q('[data-p-highlight]').onclick = () => {
+      if (!highlight(input.selectionStart, input.selectionEnd)) {
+        q('[data-p-saved]').textContent = 'Select the words you want to emphasize first.';
+        input.focus();
+      } else q('[data-p-saved]').textContent = 'Emphasis added. Open the reader to see your highlighted words.';
+    };
+    q('[data-p-clear]').onclick = clearEmphasis;
+    q('[data-p-reader-clear]').onclick = () => { pause(); clearEmphasis(); };
+    let readerSelection = null;
+    function captureSelection() {
+      const selection = window.getSelection();
+      const text = q('.prompter-text');
+      if (!selection.rangeCount || selection.isCollapsed) return;
+      const range = selection.getRangeAt(0);
+      if (!text.contains(range.startContainer) || !text.contains(range.endContainer)) return;
+      const before = document.createRange();
+      before.selectNodeContents(text);
+      before.setEnd(range.startContainer, range.startOffset);
+      readerSelection = [before.toString().length, before.toString().length + range.toString().length];
+    }
+    viewport.addEventListener('pointerup', captureSelection);
+    viewport.addEventListener('keyup', captureSelection);
+    q('[data-p-reader-highlight]').onpointerdown = captureSelection;
+    q('[data-p-reader-highlight]').onclick = () => {
+      pause();
+      captureSelection();
+      if (!readerSelection || !highlight(...readerSelection)) q('.prompter-status').textContent = 'Select words in the reader, then choose Highlight selection.';
+      else q('.prompter-status').textContent = 'Emphasis added. Resume whenever you are ready.';
+      readerSelection = null;
+    };
     q('[data-p-read]').onclick = read;
     q('[data-p-play]').onclick = toggle;
     q('[data-p-restart]').onclick = restart;
