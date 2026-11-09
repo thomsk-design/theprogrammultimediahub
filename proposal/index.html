@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="A recording and mastering standard proposed for The Program, by Thom Hamilton.">
+<title>House Sound Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: mirrors The Program's careers page. Floating pill nav, one left-aligned reading column under it, darker inset cards, four-column footer. Single dark look, by choice. */
+:root{
+  --ink:#1c1b18; --deep:#131210; --foot:#171614; --raise:#24221e; --line:#33302a;
+  --cream:#ece7dc; --muted:#a6a093; --faint:#757064;
+  --gold:#f4c242; --gold-ink:#1c1b18; --gold-soft:rgba(244,194,66,.13);
+  --ok:#93c08c; --warn:#e2a65c;
+  --display:"Newsreader", Georgia, "Times New Roman", serif;
+  --body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--ink);color:var(--cream);font-family:var(--body);font-size:15px;line-height:1.7}
+.gut{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.container{max-width:960px;margin:0 auto}
+.col{max-width:680px}
+p{margin:0}
+a{color:var(--cream)}
+h1,h2,h3{font-family:var(--display);font-weight:400;margin:0;text-wrap:balance}
+h1{font-size:clamp(2.3rem,5.4vw,3rem);line-height:1.08;letter-spacing:-.01em}
+h2{font-size:1.5rem;line-height:1.25}
+h3{font-size:1.05rem;font-family:var(--body);font-weight:600;line-height:1.4}
+.dot{color:var(--gold)}
+.eyebrow{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.small{font-size:.82rem;color:var(--faint)}
+.muted{color:var(--muted)}
+button,select,input{font:inherit}
+.btn{display:inline-flex;align-items:center;gap:8px;background:var(--gold);color:var(--gold-ink);border:1px solid var(--gold);border-radius:6px;padding:8px 16px;font-size:.88rem;font-weight:500;cursor:pointer;text-decoration:none}
+.btn.dark{background:var(--raise);color:var(--cream);border-color:var(--line)}
+.btn:disabled{opacity:.45;cursor:default}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* Nav */
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--ink)}
+.navwrap{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;padding-block:12px}
+nav{max-width:680px;margin:0 auto;display:flex;align-items:center;gap:22px;background:rgba(28,27,24,.92);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:10px;padding:9px 10px 9px 16px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.mark{display:flex;flex-direction:column;line-height:1.05;text-decoration:none;color:var(--cream)}
+.mark b{font-family:var(--display);font-weight:400;font-size:1.2rem}
+.mark span{font-size:.58rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:3px}
+.links{display:flex;gap:18px;font-size:.84rem;flex:1}
+.links a{text-decoration:none;color:var(--cream)}
+.links a:hover{color:var(--gold)}
+.navbtns{display:flex;gap:8px;margin-left:auto}
+
+main{padding-block:44px 80px}
+.page{display:flex;flex-direction:column;gap:56px}
+section{display:flex;flex-direction:column;gap:16px;scroll-margin-top:90px}
+.hero{display:flex;flex-direction:column;gap:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 11px;font-size:.8rem}
+.chip svg{width:13px;height:13px;stroke:var(--muted);fill:none;stroke-width:1.6}
+.body{display:flex;flex-direction:column;gap:14px;color:var(--cream)}
+ul.list{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:9px}
+ul.list li::marker{color:var(--muted)}
+
+/* Inset card, like their Apply box */
+.card{background:var(--deep);border:1px solid var(--line);border-radius:6px;padding:22px}
+
+/* A/B player */
+.ab{display:flex;flex-direction:column;gap:16px}
+.ab-top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{background:transparent;color:var(--muted);border:0;padding:7px 16px;font-size:.86rem;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--gold);color:var(--gold-ink);font-weight:500}
+.time{font-family:var(--mono);font-size:.82rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.waves{display:flex;flex-direction:column;gap:8px;cursor:pointer}
+.wlabel{display:flex;justify-content:space-between;font-size:.76rem;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+.wlabel.on{color:var(--cream)}
+canvas{width:100%;display:block;border-radius:4px;background:var(--ink)}
+.cv-sm{height:64px}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--line);padding-top:14px;gap:12px}
+.stat{display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat .k{font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:600}
+.stat .v{font-family:var(--mono);font-size:.92rem;font-variant-numeric:tabular-nums}
+.stat .v i{font-style:normal;color:var(--faint)}
+.stat .v b{font-weight:500;color:var(--gold)}
+
+/* Desk */
+.chain{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.76rem}
+.stage{border:1px solid var(--line);border-radius:999px;padding:2px 10px;color:var(--muted)}
+.stage.live{border-color:rgba(244,194,66,.55);color:var(--gold)}
+.stage.later{border-style:dashed}
+.arrow{color:var(--faint)}
+.drop{border:1.5px dashed var(--line);border-radius:6px;padding:20px;text-align:center;color:var(--muted);cursor:pointer;transition:border-color .2s,background .2s;font-size:.9rem}
+.drop.over{border-color:var(--gold);background:var(--gold-soft);color:var(--cream)}
+.drop strong{color:var(--cream);font-weight:500}
+.nowfile{font-family:var(--mono);font-size:.8rem;overflow-wrap:anywhere}
+.controls{display:flex;flex-wrap:wrap;gap:8px}
+.status{font-size:.82rem;color:var(--muted);min-height:1.4em}
+.settings{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;border-top:1px solid var(--line);padding-top:18px}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field label,.field .lab{font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:600}
+select,input[type=text],input[type=number]{background:var(--raise);color:var(--cream);border:1px solid var(--line);border-radius:6px;padding:7px 10px;width:100%}
+.row3{display:grid;grid-template-columns:64px 64px minmax(0,1fr);gap:8px}
+.meter{display:grid;grid-template-columns:auto 1fr 1fr;gap:4px 14px;font-size:.84rem;align-items:baseline}
+.meter .h{font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.num.after{color:var(--gold)}
+.filename{font-family:var(--mono);font-size:.78rem;color:var(--gold);overflow-wrap:anywhere}
+
+/* Catalogue */
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--deep)}
+table{border-collapse:collapse;width:100%;min-width:600px;font-size:.84rem}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:600}
+tr:last-child td{border-bottom:0}
+td.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:.76rem;border-radius:999px;padding:1px 10px;border:1px solid var(--line)}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.p-rec{color:var(--muted)}.p-edit{color:var(--warn)}.p-mast{color:var(--gold)}.p-del{color:var(--ok)}
+.tally{display:flex;gap:18px;flex-wrap:wrap;font-size:.84rem;color:var(--muted)}
+.tally b{color:var(--cream);font-family:var(--mono);font-weight:500}
+
+/* Workflow */
+.phase{display:flex;flex-direction:column;gap:10px}
+.phase-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.phase-head .t{font-family:var(--mono);font-size:.76rem;color:var(--gold)}
+ol.steps{margin:0;padding:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:10px}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px;color:var(--muted)}
+ol.steps li::before{content:counter(s);font-family:var(--mono);font-size:.76rem;color:var(--faint);padding-top:3px}
+ol.steps b{color:var(--cream);font-weight:500}
+.map{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--deep)}
+.map div{padding:12px 16px;border-bottom:1px solid var(--line);font-size:.86rem;min-width:0}
+.map div:nth-child(odd){color:var(--muted);border-right:1px solid var(--line)}
+.map div:nth-last-child(-n+2){border-bottom:0}
+.map .mh{font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:600}
+
+/* Footer */
+footer{background:var(--foot);border-top:1px solid var(--line)}
+.foot{padding-block:44px 28px;display:flex;flex-direction:column;gap:28px}
+.foot-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:28px}
+.foot-grid h4{margin:0 0 12px;font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;font-weight:600}
+.foot-grid ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:.84rem}
+.foot-grid a{color:var(--muted);text-decoration:none}
+.foot-grid a:hover{color:var(--cream)}
+.foot-line{border-top:1px solid var(--line);padding-top:18px}
+
+@media (max-width:720px){ .links{display:none} }
+@media (max-width:560px){
+  .settings{grid-template-columns:1fr}
+  .stats{grid-template-columns:1fr}
+  .map{grid-template-columns:1fr}
+  .map .mh{display:none}
+  .map div:nth-child(odd){border-right:0;border-bottom:0;padding-bottom:0;font-size:.78rem}
+  .foot-grid{grid-template-columns:1fr 1fr}
+  .foot-grid>div:first-child{grid-column:1/-1}
+  .navbtns .dark{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}html{scroll-behavior:auto}}
+</style>
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+</head>
+<body>
+
+
+<div class="navwrap gut">
+  <nav aria-label="Page sections">
+    <a class="mark" href="#top"><b>House Sound<span class="dot">.</span></b><span>by Thom Hamilton</span></a>
+    <div class="links"><a href="#listen">Before &amp; after</a><a href="#desk">The desk</a><a href="#catalogue">Catalogue</a><a href="#workflow">Workflow</a></div>
+    <div class="navbtns"><a class="btn" href="#listen">Listen</a><a class="btn dark" href="#contact">Contact</a></div>
+  </nav>
+</div>
+
+<main class="gut" id="top">
+  <div class="container"><div class="col page">
+
+    <header class="hero">
+      <p class="eyebrow">A proposal for AlchemistOne</p>
+      <h1>One house sound<span class="dot">.</span></h1>
+      <div class="chips">
+        <span class="chip"><svg viewBox="0 0 16 16"><path d="M8 14s5-4.3 5-8A5 5 0 0 0 3 6c0 3.7 5 8 5 8z"/><circle cx="8" cy="6" r="1.8"/></svg>Regina, SK</span>
+        <span class="chip"><svg viewBox="0 0 16 16"><rect x="5.5" y="1.5" width="5" height="8" rx="2.5"/><path d="M3 8a5 5 0 0 0 10 0M8 13v2"/></svg>Spoken word &amp; location audio</span>
+        <span class="chip"><svg viewBox="0 0 16 16"><rect x="1.5" y="3.5" width="9" height="9" rx="1.5"/><path d="M10.5 7l4-2.5v7l-4-2.5"/></svg>Whitetail Films</span>
+      </div>
+      <p class="small">Prepared October 21, 2026, for the Audio Producer posting</p>
+    </header>
+
+    <section>
+      <h2>Why this page exists</h2>
+      <div class="body">
+        <p>The posting asks for more than six months of audio. It asks for a recording setup and a standard that keep producing high-quality audio after the term ends.</p>
+        <p>This page is how I'd build that standard. It starts with real work you can hear, then a small desk that gives every file the same loudness and finish, a tracker for the whole catalogue, and the system I already run on every wedding I film.</p>
+      </div>
+    </section>
+
+    <!-- BEFORE / AFTER -->
+    <section id="listen">
+      <h2>Listen first</h2>
+      <p class="muted">A wedding highlight film, 6 minutes 18 seconds. Vows and speeches recorded on lavs in rooms I didn't choose, then edited and mastered by me. Switch between the two while it plays; they stay in sync.</p>
+
+      <div class="card ab">
+        <div class="ab-top">
+          <div class="seg" role="group" aria-label="Choose mix">
+            <button type="button" id="abBefore" aria-pressed="false">Before</button>
+            <button type="button" id="abAfter" aria-pressed="true">After</button>
+          </div>
+          <div class="controls">
+            <button class="btn" type="button" id="abPlay">Play</button>
+          </div>
+        </div>
+
+        <div class="waves" id="abWaves" title="Click to jump to a moment">
+          <div class="wlabel" id="lblBefore"><span>Before · raw edit</span></div>
+          <canvas class="cv-sm" id="cvAbBefore" aria-label="Waveform of the raw mix"></canvas>
+          <div class="wlabel on" id="lblAfter"><span>After · mastered</span><span class="time" id="abTime">0:00 / 6:18</span></div>
+          <canvas class="cv-sm" id="cvAbAfter" aria-label="Waveform of the mastered mix"></canvas>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><span class="k">Loudness</span><span class="v"><i>−21.0 →</i> <b>−15.8 LUFS</b></span></div>
+          <div class="stat"><span class="k">Loudness range</span><span class="v"><i>8.4 →</i> <b>5.9 LU</b></span></div>
+          <div class="stat"><span class="k">True peak</span><span class="v"><i>−2.1 →</i> <b>−1.0 dBTP</b></span></div>
+        </div>
+        <p class="small">This film is mastered for streaming, around −16. For The Program I'd master quieter, around −18, so it sits gently in a listener's ears at night.</p>
+        <audio id="audBefore" src="/media/before.mp3" preload="metadata"></audio>
+        <audio id="audAfter" src="/media/after.mp3" preload="metadata"></audio>
+      </div>
+    </section>
+
+    <!-- DESK -->
+    <section id="desk">
+      <h2>The processing desk</h2>
+      <p class="muted">Drop a spoken-word file and it runs through the house chain in your browser. Levelling, loudness and the peak ceiling happen for real here. A short sample with two uneven voices and some hiss is loaded, or you can run the raw wedding mix above through it.</p>
+
+      <div class="card" style="display:flex;flex-direction:column;gap:16px">
+        <div class="chain" aria-label="Processing chain">
+          <span class="stage live">Analyse</span><span class="arrow">→</span>
+          <span class="stage later" title="Runs on Auphonic in the full build">Denoise</span><span class="arrow">→</span>
+          <span class="stage live">High-pass 80 Hz</span><span class="arrow">→</span>
+          <span class="stage live">Gentle level</span><span class="arrow">→</span>
+          <span class="stage live">Loudness</span><span class="arrow">→</span>
+          <span class="stage live">Peak ceiling</span>
+        </div>
+
+        <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose or drop an audio file">
+          <strong>Drop a WAV, MP3 or M4A here</strong> or click to choose one.<br>
+          <span class="small">Processes the first 10 minutes. Nothing leaves your browser.</span>
+          <input type="file" id="file" accept="audio/*" hidden>
+        </div>
+        <div class="controls"><button class="btn dark" type="button" id="loadWedding">Use the raw wedding mix</button><button class="btn dark" type="button" id="loadSample">Use the sample</button></div>
+
+        <div class="nowfile" id="nowfile">Sample · two voices, one sitting 11 dB under the other, with hiss</div>
+
+        <div class="waves" style="cursor:default">
+          <div class="wlabel"><span>Raw</span><span class="num" id="rawLabel">—</span></div>
+          <canvas class="cv-sm" id="cvBefore" aria-label="Waveform before processing"></canvas>
+          <div class="wlabel on"><span>House sound</span><span class="num" id="procLabel">—</span></div>
+          <canvas class="cv-sm" id="cvAfter" aria-label="Waveform after processing"></canvas>
+        </div>
+
+        <div class="controls">
+          <button class="btn dark" id="playRaw" type="button">Play raw</button>
+          <button class="btn" id="playProc" type="button">Play house sound</button>
+          <button class="btn dark" id="stop" type="button">Stop</button>
+        </div>
+        <p class="status" id="status" aria-live="polite"></p>
+
+        <div class="settings">
+          <div class="field">
+            <label for="target">Loudness standard</label>
+            <select id="target">
+              <option value="-18|-1.5" selected>House · −18 LUFS, −1.5 dBTP</option>
+              <option value="-16|-1">Streaming · −16 LUFS, −1 dBTP</option>
+              <option value="-23|-1">Broadcast EBU R128 · −23 LUFS</option>
+            </select>
+            <div class="meter" aria-label="Measurements" style="margin-top:10px">
+              <span class="h"></span><span class="h">Raw</span><span class="h">House</span>
+              <span>Loudness</span><span class="num" id="mLufsA">—</span><span class="num after" id="mLufsB">—</span>
+              <span>Peak</span><span class="num" id="mPkA">—</span><span class="num after" id="mPkB">—</span>
+              <span>Level spread</span><span class="num" id="mSpA">—</span><span class="num after" id="mSpB">—</span>
+            </div>
+            <p class="small">Level spread is the gap between the quietest and loudest stretches of speech. Smaller means nobody reaches for the volume.</p>
+          </div>
+          <div class="field">
+            <span class="lab">Delivery name</span>
+            <div class="row3">
+              <input type="number" id="wk" min="1" max="13" value="2" aria-label="Week">
+              <input type="number" id="dy" min="1" max="7" value="4" aria-label="Day">
+              <input type="text" id="ttl" value="Urge surfing" aria-label="Title">
+            </div>
+            <div class="filename" id="fname"></div>
+            <p class="small">Week, day, title, version and loudness in every name, so the app developer never has to ask which file is current.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CATALOGUE -->
+    <section id="catalogue">
+      <h2>Two hundred files, none lost</h2>
+      <p class="muted">Every piece moves through four stages and leaves in one format, one naming pattern and one loudness. These rows are examples.</p>
+      <div class="tally"><span><b>212</b> planned</span><span><b>64</b> delivered</span><span><b>18</b> mastered</span><span><b>11</b> in edit</span><span><b>38</b> app sessions to re-master</span></div>
+      <div class="tablebox">
+        <table>
+          <thead><tr><th>File</th><th>Voice</th><th>Stage</th><th>Loudness</th><th>Length</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">TP_W01_D01_arriving_v02.wav</td><td>Founder</td><td><span class="pill p-del">Delivered</span></td><td class="mono">−18.0</td><td class="mono">08:12</td></tr>
+            <tr><td class="mono">TP_W02_D03_the-pull_v04.wav</td><td>Founder</td><td><span class="pill p-del">Delivered</span></td><td class="mono">−18.0</td><td class="mono">11:40</td></tr>
+            <tr><td class="mono">TP_W02_D04_urge-surfing_v03.wav</td><td>Facilitator</td><td><span class="pill p-mast">Mastered</span></td><td class="mono">−18.1</td><td class="mono">09:05</td></tr>
+            <tr><td class="mono">TP_W03_D01_who-is-watching_v01.wav</td><td>Founder</td><td><span class="pill p-edit">In edit · 3 pickups</span></td><td class="mono">—</td><td class="mono">14:22</td></tr>
+            <tr><td class="mono">APP_meditation_body-scan_remaster.wav</td><td>Existing app</td><td><span class="pill p-edit">Re-master</span></td><td class="mono">−21.4 → −18</td><td class="mono">12:00</td></tr>
+            <tr><td class="mono">TP_W03_D02_11pm_v01.wav</td><td>Guest voice</td><td><span class="pill p-rec">Recorded</span></td><td class="mono">—</td><td class="mono">raw 31:10</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- WORKFLOW -->
+    <section id="workflow">
+      <h2>The system I run on every wedding</h2>
+      <p class="muted">I built this assistant workflow for Whitetail Films. It does the slow groundwork of transcribing, logging and finding the moments, so every wedding starts in Final Cut with rough cuts instead of a blank timeline. Every creative call stays mine.</p>
+
+      <div class="phase">
+        <div class="phase-head"><h3>What I do first</h3><span class="t">about 10 minutes</span></div>
+        <ol class="steps">
+          <li><span><b>Build the multicams</b> for the ceremony, vows and speeches in Final Cut, the usual way.</span></li>
+          <li><span><b>Export each one</b> as an .fcpxmld plus an .mp3 into a whisper folder.</span></li>
+          <li><span><b>Name the couple and the drive</b> and start the run.</span></li>
+        </ol>
+      </div>
+
+      <div class="card phase">
+        <div class="phase-head"><h3>What the assistant does</h3><span class="t">30 to 60 minutes, on my Mac, nothing uploaded</span></div>
+        <ol class="steps">
+          <li><span><b>Checks every file.</b> Matches cameras to recorders and flags silent lavs, dead recorders, wrong clocks and stretches with no picture.</span></li>
+          <li><span><b>Transcribes locally.</b> Whisper writes timestamped transcripts, then names and speakers are pulled out and misheard words and swearing flagged.</span></li>
+          <li><span><b>Writes three edit plans</b> from a style guide learned from 24 of my finished films. One opens funny, one emotional, one on something specific to the couple.</span></li>
+          <li><span><b>Builds the rough cuts</b> as Final Cut XMLs, using my angles, letterbox and markers, with every in and out point checked against the audio.</span></li>
+          <li><span><b>Cuts the full-length films</b> of the ceremony and speeches in my angle style.</span></li>
+          <li><span><b>Reports back</b> with names to confirm, swearing, gaps and the exact joins to check by ear.</span></li>
+        </ol>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head"><h3>What I do after</h3><span class="t">the craft</span></div>
+        <ol class="steps">
+          <li><span><b>Watch the three versions</b> and pick a direction, or mix the best of each.</span></li>
+          <li><span><b>Fix, swap and set levels.</b> The assistant never changes a dB.</span></li>
+          <li><span><b>Add music, colour and finishing,</b> and confirm every name before titles.</span></li>
+          <li><span><b>Feed back what didn't feel right.</b> It becomes a rule for the next wedding.</span></li>
+        </ol>
+      </div>
+
+      <ul class="list muted">
+        <li>It never touches original media or Final Cut libraries.</li>
+        <li>It never uploads anything.</li>
+        <li>It never delivers a finished film.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>The same habits, pointed at The Program</h2>
+      <div class="map">
+        <div class="mh">In my wedding work</div><div class="mh">For The Program</div>
+        <div>A style guide learned from 24 finished films</div><div>An audio style guide, so anyone who records after me sounds like the same program</div>
+        <div>A file check before anything is cut</div><div>A session checklist: mic distance, room tone, levels, takes logged</div>
+        <div>Transcripts checked against the audio</div><div>Every take checked against the script, with pickups listed before the voice leaves the room</div>
+        <div>Rough cuts, then the creative edit by hand</div><div>Machines handle loudness and logging. Pace, breath and keeping the person are edited by ear</div>
+        <div>Rules updated from feedback</div><div>A house standard that improves with the founder's notes and outlasts my term</div>
+      </div>
+    </section>
+
+    <section id="contact">
+      <div class="card" style="display:flex;flex-direction:column;gap:12px">
+        <h2>Next step</h2>
+        <p class="muted" style="max-width:52ch">I'd like to record one short piece with you and deliver it through this standard, so you can judge the work itself.</p>
+        <div class="controls" style="align-items:center"><button class="btn" type="button" id="copyMail">Copy my email →</button><span class="num" id="mail" style="user-select:all;font-size:.86rem">hello@whitetailfilms.net</span></div>
+        <p class="small" id="copyNote" aria-live="polite"></p>
+      </div>
+    </section>
+
+  </div></div>
+</main>
+
+<footer class="gut">
+  <div class="container foot">
+    <div class="foot-grid">
+      <div class="stack" style="display:flex;flex-direction:column;gap:10px">
+        <span class="mark"><b>House Sound<span class="dot">.</span></b><span>by Thom Hamilton</span></span>
+        <p class="small" style="max-width:30ch">A recording and mastering standard proposed for The Program.</p>
+      </div>
+      <div><h4>This page</h4><ul><li><a href="#listen">Before &amp; after</a></li><li><a href="#desk">The desk</a></li><li><a href="#catalogue">Catalogue</a></li><li><a href="#workflow">Workflow</a></li></ul></div>
+      <div><h4>Contact</h4><ul><li><a href="#contact">Next step</a></li><li><span class="muted" style="font-size:.84rem">Regina, SK</span></li></ul></div>
+    </div>
+    <p class="small foot-line">Prepared by Thom Hamilton. Not an AlchemistOne page.</p>
+  </div>
+</footer>
+
+<script>
+const PEAKS = {"before":{"max":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.255,0.374,0.332,0.34,0.329,0.338,0.306,0.39,0.354,0.341,0.068,0.447,0.369,0.394,0.024,0.021,0.314,0.336,0.313,0.359,0.373,0.213,0.306,0.347,0.321,0.361,0.31,0.402,0.38,0.306,0.39,0.03,0.022,0.018,0.293,0.292,0.313,0.354,0.384,0.35,0.417,0.423,0.326,0.155,0.024,0.372,0.327,0.385,0.35,0.295,0.388,0.292,0.35,0.349,0.035,0.022,0.02,0.021,0.021,0.02,0.059,0.323,0.331,0.369,0.292,0.315,0.343,0.323,0.437,0.348,0.31,0.364,0.403,0.265,0.028,0.378,0.39,0.397,0.354,0.368,0.333,0.269,0.384,0.251,0.178,0.016,0.0,0.0,0.0,0.0,0.0,0.0,0.274,0.352,0.331,0.289,0.307,0.315,0.333,0.24,0.275,0.26,0.234,0.21,0.374,0.302,0.302,0.315,0.238,0.214,0.329,0.258,0.206,0.022,0.344,0.249,0.253,0.297,0.224,0.321,0.287,0.275,0.247,0.373,0.365,0.26,0.218,0.301,0.302,0.291,0.298,0.255,0.202,0.205,0.283,0.313,0.024,0.132,0.27,0.304,0.264,0.292,0.286,0.243,0.272,0.244,0.284,0.041,0.296,0.284,0.231,0.273,0.197,0.262,0.241,0.235,0.253,0.296,0.248,0.031,0.015,0.0,0.0,0.0,0.0,0.0,0.0,0.576,0.659,0.579,0.373,0.261,0.271,0.627,0.28,0.349,0.398,0.249,0.282,0.409,0.605,0.677,0.374,0.544,0.478,0.297,0.421,0.415,0.329,0.192,0.658,0.495,0.362,0.413,0.376,0.353,0.23,0.199,0.065,0.496,0.449,0.501,0.607,0.322,0.307,0.222,0.203,0.551,0.024,0.488,0.446,0.418,0.387,0.528,0.47,0.221,0.391,0.318,0.253,0.32,0.028,0.018,0.0,0.0,0.0,0.0,0.0,0.0,0.519,0.54,0.554,0.426,0.352,0.349,0.211,0.306,0.409,0.384,0.407,0.392,0.373,0.135,0.237,0.133,0.018,0.069,0.022,0.028,0.031,0.451,0.965,0.397,0.412,0.401,0.49,0.211,0.452,0.344,0.336,0.198,0.079,0.453,0.441,0.42,0.314,0.287,0.199,0.275,0.323,0.263,0.208,0.208,0.019,0.465,0.499,0.551,0.475,0.237,0.205,0.36,0.403,0.252,0.071,0.434,0.419,0.27,0.276,0.318,0.198,0.067,0.018,0.315,0.326,0.316,0.326,0.28,0.311,0.34,0.011,0.22,0.386,0.428,0.349,0.334,0.234,0.021,0.023,0.474,0.531,0.43,0.454,0.33,0.259,0.351,0.333,0.19,0.227,0.204,0.217,0.319,0.172,0.072,0.493,0.411,0.247,0.252,0.264,0.245,0.229,0.013,0.0,0.0,0.0,0.0,0.0,0.0,0.562,0.611,0.459,0.729,0.467,0.598,0.68,0.752,0.69,0.519,0.285,0.292,0.275,0.302,0.201,0.258,0.209,0.009,0.458,0.529,0.541,0.78,0.429,0.42,0.411,0.196,0.365,0.356,0.084,0.253,0.44,0.477,0.453,0.051,0.007,0.322,0.222,0.322,0.279,0.352,0.353,0.404,0.361,0.221,0.334,0.345,0.366,0.302,0.231,0.008,0.389,0.515,0.525,0.293,0.413,0.456,0.421,0.094,0.494,0.578,0.446,0.154,0.565,0.404,0.816,0.629,0.505,0.516,0.468,0.032,0.389,0.419,0.47,0.508,0.392,0.379,0.23,0.299,0.062,0.317,0.317,0.401,0.249,0.413,0.397,0.273,0.281,0.24,0.212,0.11,0.007,0.314,0.475,0.314,0.309,0.398,0.278,0.241,0.01,0.006,0.412,0.322,0.387,0.321,0.348,0.109,0.199,0.0,0.0,0.0,0.0,0.0,0.0,0.012,0.416,0.338,0.244,0.309,0.186,0.066,0.183,0.288,0.154,0.376,0.426,0.292,0.171,0.096,0.414,0.624,0.434,0.109,0.115,0.076,0.487,0.404,0.225,0.101,0.083,0.519,0.593,0.064,0.37,0.122,0.361,0.195,0.093,0.048,0.012,0.012,0.008,0.006,0.011,0.011,0.032,0.022,0.02,0.019,0.026,0.011,0.009,0.01,0.013,0.025,0.019,0.024,0.048,0.029,0.022,0.021,0.071,0.115,0.109,0.063,0.026,0.325,0.39,0.223,0.377,0.109,0.158,0.102,0.108,0.439,0.427,0.261,0.165,0.284,0.501,0.418,0.237,0.276,0.119,0.381,0.416,0.307,0.219,0.191,0.379,0.363,0.191,0.266,0.195,0.183,0.11,0.199,0.219,0.315,0.38,0.361,0.382,0.36,0.34,0.51,0.291,0.34,0.196,0.192,0.077,0.042,0.059,0.009,0.027,0.048,0.034,0.013,0.023,0.028,0.023,0.014,0.073,0.059,0.394,0.541,0.269,0.576,0.518,0.486,0.733,0.603,0.658,0.581,0.725,0.592,0.61,0.537,0.82,0.597,0.791,0.495,0.549,0.576,0.536,0.495,0.514,0.335,0.178,0.064,0.312,0.228,0.164,0.559,0.508,0.611,0.677,0.494,0.585,0.738,0.524,0.555,0.765,0.616,0.548,0.562,0.259,0.297,0.1,0.049,0.075,0.082,0.116,0.073,0.075,0.089,0.03,0.076,0.035,0.042,0.05,0.071,0.023,0.022,0.02,0.027,0.024,0.154,0.195,0.435,0.579,0.633,0.617,0.597,0.575,0.604,0.565,0.429,0.626,0.598,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.021,0.395,0.336,0.215,0.387,0.294,0.364,0.284,0.356,0.362,0.377,0.393,0.358,0.232,0.317,0.334,0.34,0.335,0.376,0.247,0.042,0.248,0.345,0.293,0.349,0.362,0.331,0.306,0.024,0.377,0.384,0.326,0.036,0.022,0.024,0.359,0.32,0.399,0.248,0.309,0.038,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.014,0.373,0.297,0.28,0.317,0.27,0.272,0.379,0.268,0.278,0.361,0.364,0.282,0.313,0.342,0.336,0.025,0.365,0.328,0.295,0.319,0.028,0.015,0.026,0.027,0.274,0.332,0.311,0.377,0.322,0.464,0.391,0.042,0.052,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.24,0.408,0.285,0.367,0.333,0.338,0.264,0.349,0.307,0.32,0.252,0.4,0.296,0.026,0.029,0.442,0.338,0.261,0.381,0.266,0.378,0.337,0.331,0.328,0.366,0.272,0.031,0.387,0.304,0.384,0.365,0.316,0.371,0.044,0.071,0.379,0.269,0.367,0.269,0.297,0.294,0.206,0.37,0.264,0.374,0.37,0.22,0.353,0.304,0.281,0.02,0.352,0.304,0.387,0.38,0.304,0.045,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.29,0.549,0.556,0.415,0.567,0.474,0.22,0.252,0.309,0.348,0.226,0.323,0.342,0.234,0.265,0.216,0.135,0.053,0.019,0.019,0.672,0.555,0.515,0.369,0.368,0.268,0.428,0.341,0.287,0.265,0.02,0.237,0.247,0.253,0.223,0.263,0.295,0.185,0.038,0.053,0.448,0.506,0.472,0.35,0.346,0.511,0.351,0.259,0.283,0.017,0.161,0.334,0.067,0.267,0.009,0.134,0.419,0.372,0.368,0.167,0.314,0.317,0.072,0.008,0.01,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"min":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,-0.21,-0.277,-0.28,-0.217,-0.279,-0.268,-0.254,-0.296,-0.253,-0.226,-0.073,-0.311,-0.237,-0.203,-0.027,-0.027,-0.325,-0.258,-0.246,-0.286,-0.223,-0.152,-0.227,-0.266,-0.248,-0.273,-0.231,-0.315,-0.278,-0.204,-0.273,-0.044,-0.018,-0.02,-0.263,-0.3,-0.243,-0.252,-0.313,-0.233,-0.305,-0.276,-0.245,-0.13,-0.021,-0.263,-0.293,-0.29,-0.287,-0.29,-0.308,-0.252,-0.247,-0.281,-0.063,-0.016,-0.019,-0.024,-0.022,-0.018,-0.081,-0.24,-0.279,-0.289,-0.229,-0.247,-0.28,-0.206,-0.245,-0.244,-0.218,-0.369,-0.263,-0.17,-0.033,-0.29,-0.289,-0.258,-0.281,-0.305,-0.256,-0.245,-0.285,-0.204,-0.09,-0.015,0.0,0.0,0.0,0.0,0.0,0.0,-0.249,-0.243,-0.282,-0.249,-0.318,-0.254,-0.291,-0.219,-0.225,-0.281,-0.185,-0.16,-0.239,-0.279,-0.323,-0.282,-0.22,-0.2,-0.235,-0.16,-0.161,-0.017,-0.214,-0.207,-0.231,-0.246,-0.236,-0.204,-0.219,-0.289,-0.219,-0.328,-0.281,-0.228,-0.153,-0.238,-0.28,-0.287,-0.262,-0.239,-0.182,-0.199,-0.23,-0.271,-0.027,-0.162,-0.289,-0.316,-0.237,-0.244,-0.238,-0.233,-0.222,-0.239,-0.231,-0.038,-0.262,-0.231,-0.222,-0.222,-0.168,-0.252,-0.24,-0.244,-0.241,-0.189,-0.31,-0.047,-0.016,0.0,0.0,0.0,0.0,0.0,0.0,-0.498,-0.474,-0.454,-0.403,-0.246,-0.224,-0.346,-0.372,-0.315,-0.388,-0.223,-0.215,-0.292,-0.486,-0.437,-0.232,-0.456,-0.396,-0.215,-0.371,-0.423,-0.382,-0.142,-0.49,-0.351,-0.311,-0.352,-0.344,-0.408,-0.208,-0.114,-0.074,-0.523,-0.453,-0.482,-0.316,-0.299,-0.254,-0.225,-0.204,-0.404,-0.027,-0.432,-0.282,-0.39,-0.428,-0.349,-0.321,-0.188,-0.382,-0.357,-0.251,-0.378,-0.04,-0.015,-0.0,-0.0,-0.0,-0.0,-0.0,-0.0,-0.385,-0.402,-0.358,-0.401,-0.251,-0.267,-0.161,-0.176,-0.231,-0.386,-0.375,-0.28,-0.322,-0.148,-0.166,-0.11,-0.022,-0.057,-0.022,-0.06,-0.037,-0.401,-0.549,-0.352,-0.369,-0.277,-0.314,-0.172,-0.29,-0.277,-0.293,-0.112,-0.047,-0.403,-0.328,-0.345,-0.279,-0.248,-0.174,-0.178,-0.241,-0.256,-0.177,-0.15,-0.018,-0.421,-0.443,-0.473,-0.314,-0.175,-0.15,-0.255,-0.325,-0.207,-0.025,-0.395,-0.428,-0.167,-0.18,-0.25,-0.145,-0.089,-0.017,-0.156,-0.261,-0.279,-0.288,-0.224,-0.184,-0.276,-0.009,-0.13,-0.266,-0.28,-0.239,-0.197,-0.145,-0.019,-0.025,-0.475,-0.405,-0.243,-0.329,-0.247,-0.205,-0.316,-0.264,-0.177,-0.095,-0.112,-0.238,-0.215,-0.181,-0.091,-0.205,-0.379,-0.227,-0.148,-0.148,-0.157,-0.197,-0.012,0.0,0.0,0.0,0.0,0.0,0.0,-0.309,-0.562,-0.369,-0.569,-0.36,-0.515,-0.45,-0.545,-0.573,-0.303,-0.24,-0.25,-0.291,-0.262,-0.154,-0.19,-0.177,-0.014,-0.32,-0.422,-0.469,-0.712,-0.231,-0.423,-0.319,-0.155,-0.255,-0.279,-0.104,-0.156,-0.331,-0.332,-0.303,-0.094,-0.01,-0.28,-0.199,-0.269,-0.266,-0.28,-0.324,-0.315,-0.292,-0.174,-0.278,-0.303,-0.32,-0.23,-0.243,-0.009,-0.216,-0.523,-0.357,-0.255,-0.41,-0.344,-0.381,-0.093,-0.363,-0.453,-0.436,-0.13,-0.498,-0.294,-0.602,-0.519,-0.419,-0.463,-0.459,-0.022,-0.296,-0.286,-0.351,-0.385,-0.326,-0.287,-0.199,-0.276,-0.07,-0.231,-0.28,-0.289,-0.198,-0.421,-0.316,-0.202,-0.242,-0.217,-0.194,-0.1,-0.007,-0.246,-0.376,-0.223,-0.174,-0.373,-0.211,-0.19,-0.019,-0.009,-0.292,-0.208,-0.221,-0.223,-0.304,-0.103,-0.117,0.0,0.0,0.0,0.0,0.0,0.0,-0.01,-0.324,-0.321,-0.26,-0.3,-0.175,-0.043,-0.177,-0.234,-0.112,-0.28,-0.422,-0.269,-0.157,-0.1,-0.281,-0.515,-0.342,-0.117,-0.136,-0.051,-0.417,-0.434,-0.255,-0.086,-0.067,-0.451,-0.531,-0.07,-0.335,-0.145,-0.269,-0.173,-0.068,-0.048,-0.009,-0.009,-0.008,-0.006,-0.011,-0.01,-0.034,-0.028,-0.019,-0.015,-0.019,-0.012,-0.01,-0.009,-0.014,-0.023,-0.019,-0.021,-0.038,-0.029,-0.022,-0.026,-0.048,-0.124,-0.089,-0.059,-0.029,-0.347,-0.355,-0.206,-0.249,-0.091,-0.148,-0.094,-0.107,-0.376,-0.379,-0.23,-0.177,-0.207,-0.338,-0.305,-0.196,-0.197,-0.116,-0.328,-0.466,-0.301,-0.187,-0.171,-0.384,-0.383,-0.247,-0.258,-0.169,-0.145,-0.144,-0.208,-0.215,-0.329,-0.43,-0.326,-0.445,-0.465,-0.415,-0.338,-0.184,-0.247,-0.201,-0.189,-0.056,-0.037,-0.047,-0.011,-0.029,-0.04,-0.04,-0.02,-0.015,-0.025,-0.026,-0.014,-0.073,-0.046,-0.284,-0.539,-0.248,-0.477,-0.538,-0.495,-0.503,-0.657,-0.648,-0.592,-0.592,-0.632,-0.562,-0.537,-0.88,-0.65,-0.63,-0.748,-0.538,-0.488,-0.575,-0.458,-0.518,-0.324,-0.178,-0.059,-0.209,-0.272,-0.198,-0.538,-0.482,-0.477,-0.571,-0.518,-0.57,-0.689,-0.541,-0.735,-0.833,-0.597,-0.478,-0.598,-0.307,-0.364,-0.1,-0.033,-0.068,-0.082,-0.102,-0.056,-0.076,-0.077,-0.034,-0.086,-0.026,-0.041,-0.047,-0.069,-0.024,-0.027,-0.017,-0.033,-0.029,-0.147,-0.203,-0.395,-0.522,-0.622,-0.566,-0.562,-0.591,-0.589,-0.567,-0.548,-0.565,-0.676,0.0,0.0,0.0,0.0,0.0,0.0,-0.0,-0.017,-0.305,-0.269,-0.198,-0.317,-0.279,-0.305,-0.279,-0.259,-0.337,-0.314,-0.333,-0.353,-0.181,-0.294,-0.248,-0.31,-0.276,-0.38,-0.261,-0.055,-0.267,-0.355,-0.317,-0.321,-0.389,-0.259,-0.297,-0.027,-0.312,-0.374,-0.336,-0.027,-0.021,-0.018,-0.288,-0.288,-0.331,-0.265,-0.311,-0.043,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,-0.015,-0.271,-0.199,-0.216,-0.327,-0.297,-0.186,-0.292,-0.149,-0.243,-0.301,-0.305,-0.208,-0.254,-0.256,-0.252,-0.025,-0.252,-0.275,-0.254,-0.244,-0.034,-0.018,-0.021,-0.032,-0.275,-0.266,-0.296,-0.269,-0.267,-0.271,-0.243,-0.042,-0.043,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,-0.18,-0.362,-0.255,-0.273,-0.226,-0.341,-0.234,-0.297,-0.233,-0.241,-0.224,-0.292,-0.286,-0.023,-0.031,-0.253,-0.238,-0.208,-0.367,-0.223,-0.291,-0.246,-0.218,-0.297,-0.323,-0.233,-0.029,-0.382,-0.228,-0.283,-0.249,-0.254,-0.289,-0.054,-0.078,-0.25,-0.211,-0.27,-0.251,-0.25,-0.204,-0.196,-0.266,-0.225,-0.297,-0.291,-0.199,-0.23,-0.238,-0.213,-0.022,-0.246,-0.204,-0.258,-0.302,-0.245,-0.057,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,-0.236,-0.498,-0.545,-0.218,-0.47,-0.373,-0.24,-0.138,-0.18,-0.152,-0.145,-0.248,-0.244,-0.192,-0.172,-0.163,-0.087,-0.041,-0.017,-0.021,-0.509,-0.554,-0.426,-0.241,-0.22,-0.197,-0.318,-0.27,-0.229,-0.235,-0.02,-0.218,-0.172,-0.188,-0.207,-0.191,-0.238,-0.211,-0.032,-0.042,-0.377,-0.315,-0.331,-0.272,-0.325,-0.377,-0.326,-0.191,-0.221,-0.021,-0.105,-0.263,-0.083,-0.167,-0.01,-0.109,-0.294,-0.381,-0.299,-0.112,-0.272,-0.265,-0.067,-0.007,-0.009,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]},"after":{"max":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.484,0.654,0.393,0.69,0.57,0.645,0.796,0.829,0.803,0.512,0.771,0.608,0.628,0.384,0.01,0.392,0.618,0.52,0.575,0.684,0.543,0.457,0.619,0.622,0.879,1.028,0.653,0.933,0.906,1.023,0.491,0.046,0.0,0.0,0.7,0.708,0.594,0.437,0.774,0.504,0.695,0.931,0.841,0.015,0.017,0.644,0.888,0.781,0.749,0.529,0.822,0.748,0.762,0.527,0.0,0.0,0.0,0.0,0.0,0.0,0.189,0.62,0.731,0.919,0.557,0.871,0.616,0.251,0.706,0.511,0.608,0.634,0.844,0.038,0.953,0.82,0.709,0.688,0.723,0.599,0.606,0.907,0.991,0.516,0.14,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.742,0.571,0.563,0.649,0.617,0.752,0.544,0.6,0.745,0.595,0.44,0.683,0.868,0.59,0.64,0.59,0.488,0.493,0.992,0.727,0.023,0.002,0.882,0.598,0.643,0.632,0.658,0.826,0.5,0.549,0.81,0.891,0.793,0.558,0.718,0.746,0.697,0.701,0.524,0.461,0.377,0.716,0.811,0.972,0.006,0.578,0.732,0.798,0.531,0.521,0.67,0.512,0.679,0.886,0.742,0.82,0.947,0.613,0.491,0.633,0.498,0.905,0.581,0.538,0.599,0.968,0.063,0.026,0.0,0.0,0.0,0.0,0.0,0.0,0.581,1.093,0.92,1.08,0.73,0.405,1.102,0.8,0.851,0.651,0.587,0.666,0.026,0.987,0.859,1.065,0.93,1.107,0.767,1.126,1.016,0.876,0.497,0.737,1.006,0.916,0.649,0.66,0.655,0.817,0.383,0.021,0.818,1.114,0.831,1.036,1.122,0.469,0.622,0.406,1.056,0.421,1.117,0.904,1.191,1.001,0.907,1.114,1.096,0.715,1.086,0.096,0.602,0.791,0.034,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.001,1.032,0.684,0.69,0.934,0.744,0.619,0.886,1.129,0.905,1.101,1.101,0.7,0.5,0.777,0.158,0.0,0.0,0.0,0.0,0.568,1.181,0.863,0.999,0.914,1.059,0.841,0.78,1.054,0.675,0.8,0.525,0.746,1.055,0.915,0.71,0.777,0.604,0.619,0.833,0.783,0.504,0.569,0.102,0.068,1.079,1.052,0.78,1.057,0.655,0.542,1.034,1.093,0.583,1.111,1.043,0.944,0.805,0.796,0.852,0.561,0.156,0.016,0.964,1.013,0.885,1.089,0.912,0.577,1.013,0.026,1.141,1.127,1.095,1.024,0.819,0.63,0.016,0.066,1.1,0.965,1.129,1.011,0.917,0.834,1.085,0.811,0.74,0.458,0.7,0.963,0.778,0.338,0.021,1.056,1.034,0.838,0.926,0.836,0.847,0.044,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.663,0.696,0.773,0.602,0.664,0.987,0.532,1.081,0.826,0.96,0.353,0.409,0.413,0.425,0.482,0.501,0.239,0.002,0.965,1.001,1.025,0.773,0.973,0.716,0.888,0.877,0.524,0.61,0.118,1.098,0.786,0.999,0.658,0.0,0.0,0.499,0.473,0.579,0.793,0.787,0.812,0.575,0.709,0.306,0.587,0.49,0.619,0.57,0.482,0.004,1.127,0.886,1.025,0.717,0.809,0.932,0.651,0.034,0.988,0.986,0.743,0.932,0.594,0.91,1.068,0.872,0.99,0.752,0.722,0.042,0.733,0.855,0.982,0.8,1.043,0.749,0.591,0.56,0.319,1.102,1.034,0.702,0.528,0.869,0.898,0.708,0.686,0.397,0.526,0.013,0.624,0.729,1.024,0.965,0.642,0.657,0.65,0.56,0.004,0.696,0.772,1.077,0.876,0.896,0.523,0.216,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.792,1.167,0.306,0.888,0.625,0.02,0.55,0.748,0.624,0.289,1.138,1.077,0.182,0.406,0.331,1.115,1.029,0.707,0.442,0.202,1.157,1.075,1.105,0.075,0.269,0.288,1.152,1.099,0.02,0.565,1.031,1.093,1.126,1.098,0.627,0.073,0.123,0.113,0.0,0.102,0.198,0.509,0.432,0.329,0.911,0.447,0.463,0.13,0.236,0.332,0.615,0.811,0.542,1.125,0.991,0.0,0.038,0.349,0.619,0.195,0.16,0.038,1.094,0.557,1.086,0.652,0.373,0.313,0.349,0.26,1.053,1.061,0.341,0.472,1.115,1.12,0.713,0.384,0.489,0.227,1.12,1.114,0.895,0.42,0.319,1.179,1.038,0.844,0.769,0.497,0.683,0.481,0.456,0.372,0.801,1.053,1.024,0.824,1.096,0.949,1.112,0.824,0.675,0.722,0.593,0.184,0.112,0.056,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.023,0.61,1.069,0.358,0.699,0.752,0.674,0.978,0.828,0.871,1.032,0.775,0.887,0.763,0.819,1.027,1.075,0.882,0.862,0.983,1.039,0.929,0.968,0.601,0.219,0.327,0.681,0.627,0.076,0.768,0.738,0.786,0.924,0.933,0.827,0.629,0.97,0.798,0.975,1.06,1.11,0.931,1.16,0.761,0.894,0.337,0.093,0.828,0.967,0.965,0.727,0.018,0.054,0.945,0.731,0.006,0.273,0.0,0.0,0.157,0.174,0.052,0.031,0.054,0.198,0.243,0.531,0.722,0.774,0.796,0.691,0.799,0.719,0.688,0.826,0.794,0.532,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.128,0.714,0.725,0.789,0.939,1.066,0.855,0.75,0.856,0.828,0.806,1.04,0.928,0.291,0.793,0.822,0.706,0.845,1.114,0.803,0.018,1.073,1.037,0.692,1.023,1.055,1.034,0.019,1.173,1.025,0.872,1.126,0.015,0.021,0.312,0.89,0.995,0.694,0.566,0.363,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.663,0.781,0.638,0.282,0.619,0.755,0.595,0.572,0.38,0.6,0.656,1.073,1.004,0.994,0.692,0.426,0.624,0.713,0.621,0.633,0.647,0.0,0.0,0.0,0.501,0.746,0.602,0.812,0.83,0.627,0.678,0.77,0.001,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.575,0.973,1.038,0.453,0.765,0.898,0.341,0.882,0.698,0.624,0.498,0.987,0.366,0.068,0.792,0.607,0.85,0.723,0.496,0.691,0.691,0.271,0.624,0.885,0.821,0.051,0.73,0.776,0.6,0.714,0.849,0.916,0.634,0.01,0.007,0.696,0.412,0.668,0.529,0.784,0.439,0.391,1.011,0.719,0.726,0.554,0.435,0.681,0.624,0.489,0.526,0.807,0.915,0.933,0.79,0.214,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.004,0.716,1.085,1.095,1.099,0.907,0.748,0.484,0.811,1.055,1.047,0.726,0.778,0.659,0.628,0.886,0.751,0.362,0.025,0.056,1.098,1.13,1.142,1.046,1.135,0.746,0.672,1.131,0.835,0.756,0.082,0.616,0.738,1.019,0.559,0.725,0.815,0.914,0.288,0.126,0.086,1.009,1.107,0.885,0.75,1.004,0.891,0.561,1.144,0.42,0.0,0.0,0.0,0.0,0.0,0.0,1.105,0.856,0.964,0.505,0.677,0.843,0.524,0.044,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"min":[-0.0,-0.0,-0.0,-0.0,-0.0,-0.0,-0.0,-0.0,-0.62,-0.523,-0.326,-0.413,-0.514,-0.403,-0.677,-0.729,-0.648,-0.309,-0.639,-0.529,-0.544,-0.303,-0.011,-0.432,-0.755,-0.39,-0.612,-0.743,-0.341,-0.363,-0.54,-0.503,-0.649,-0.797,-0.61,-0.786,-0.678,-0.7,-0.287,-0.047,-0.0,-0.0,-0.708,-0.599,-0.426,-0.346,-0.695,-0.467,-0.636,-0.826,-0.621,-0.014,-0.019,-0.498,-0.826,-0.392,-0.704,-0.48,-0.644,-0.665,-0.729,-0.411,-0.0,-0.0,-0.0,-0.0,-0.0,-0.001,-0.228,-0.459,-0.487,-0.954,-0.42,-0.516,-0.473,-0.293,-0.557,-0.397,-0.452,-0.581,-0.77,-0.039,-0.779,-0.625,-0.524,-0.69,-0.556,-0.7,-0.543,-0.594,-0.767,-0.355,-0.137,-0.0,-0.0,0.0,-0.0,-0.0,-0.0,-0.0,-0.546,-0.632,-0.432,-0.683,-0.75,-0.748,-0.582,-0.643,-0.713,-0.703,-0.237,-0.549,-0.644,-0.654,-0.678,-0.723,-0.518,-0.616,-0.787,-0.522,-0.012,-0.003,-0.664,-0.399,-0.582,-0.729,-0.657,-0.645,-0.706,-0.686,-0.682,-0.648,-0.674,-0.456,-0.548,-0.412,-0.826,-0.743,-0.604,-0.368,-0.351,-0.575,-0.562,-0.709,-0.004,-0.75,-0.708,-0.75,-0.544,-0.503,-0.483,-0.439,-0.588,-0.79,-0.657,-0.536,-0.872,-0.591,-0.529,-0.538,-0.304,-0.781,-0.453,-0.574,-0.465,-0.765,-0.07,-0.026,-0.0,0.0,0.0,0.0,0.0,0.0,-0.512,-0.804,-0.562,-0.825,-0.49,-0.346,-0.767,-0.513,-0.469,-0.514,-0.356,-0.386,-0.027,-0.812,-0.608,-0.677,-0.838,-0.777,-0.582,-0.572,-0.995,-0.439,-0.306,-0.443,-0.58,-0.447,-0.419,-0.352,-0.408,-0.64,-0.254,-0.025,-0.458,-0.784,-0.632,-0.377,-0.606,-0.266,-0.325,-0.244,-0.602,-0.212,-0.628,-0.565,-0.881,-0.929,-0.467,-0.569,-0.408,-0.287,-0.756,-0.098,-0.417,-0.603,-0.033,-0.0,-0.0,-0.0,-0.0,-0.0,-0.0,-0.0,-0.515,-0.557,-0.469,-0.345,-0.442,-0.346,-0.418,-0.444,-0.481,-0.779,-0.714,-0.872,-0.566,-0.266,-0.438,-0.123,-0.0,0.0,0.0,-0.0,-0.23,-0.756,-0.609,-0.761,-0.526,-0.655,-0.449,-0.479,-0.473,-0.499,-0.577,-0.245,-0.268,-0.698,-0.556,-0.357,-0.652,-0.428,-0.389,-0.497,-0.521,-0.365,-0.311,-0.075,-0.059,-0.622,-0.841,-0.403,-0.576,-0.288,-0.432,-0.603,-0.629,-0.469,-0.632,-0.666,-0.472,-0.315,-0.456,-0.595,-0.228,-0.106,-0.011,-0.622,-0.571,-0.685,-0.79,-0.441,-0.451,-0.721,-0.04,-0.437,-0.699,-0.574,-0.717,-0.428,-0.426,-0.018,-0.068,-0.737,-0.692,-0.607,-0.597,-0.475,-0.642,-0.694,-0.679,-0.318,-0.257,-0.502,-0.53,-0.433,-0.328,-0.022,-0.604,-0.667,-0.488,-0.356,-0.376,-0.485,-0.038,-0.0,0.0,0.0,0.0,0.0,0.0,-0.0,-0.388,-0.528,-0.754,-0.31,-0.768,-0.652,-0.443,-0.933,-0.682,-0.684,-0.245,-0.306,-0.301,-0.254,-0.251,-0.309,-0.141,-0.002,-0.679,-0.787,-0.696,-0.448,-0.578,-0.703,-0.665,-0.455,-0.326,-0.384,-0.187,-0.654,-0.521,-0.531,-0.458,-0.0,-0.0,-0.506,-0.342,-0.401,-0.617,-0.526,-0.49,-0.386,-0.424,-0.164,-0.418,-0.358,-0.575,-0.421,-0.433,-0.003,-0.801,-0.708,-0.603,-0.62,-0.599,-0.643,-0.478,-0.04,-0.526,-0.509,-0.454,-0.678,-0.477,-0.595,-0.905,-0.591,-0.783,-0.484,-0.511,-0.035,-0.515,-0.71,-0.659,-0.501,-0.711,-0.55,-0.382,-0.333,-0.178,-0.717,-0.749,-0.36,-0.327,-0.695,-0.595,-0.542,-0.507,-0.292,-0.424,-0.012,-0.352,-0.506,-0.557,-0.736,-0.486,-0.395,-0.338,-0.285,-0.005,-0.587,-0.584,-0.725,-0.631,-0.544,-0.386,-0.16,0.0,0.0,0.0,0.0,0.0,0.0,-0.0,-0.676,-0.528,-0.206,-0.44,-0.492,-0.018,-0.365,-0.54,-0.438,-0.233,-0.731,-0.599,-0.18,-0.408,-0.282,-0.652,-0.584,-0.424,-0.291,-0.133,-0.478,-0.647,-0.552,-0.061,-0.19,-0.179,-0.919,-0.528,-0.021,-0.509,-0.542,-0.682,-0.69,-0.667,-0.429,-0.064,-0.118,-0.113,0.0,-0.115,-0.336,-0.48,-0.502,-0.312,-0.809,-0.489,-0.516,-0.145,-0.221,-0.263,-0.587,-0.744,-0.511,-1.127,-0.726,-0.0,-0.033,-0.351,-0.318,-0.143,-0.098,-0.048,-0.712,-0.323,-0.596,-0.527,-0.341,-0.229,-0.285,-0.149,-0.553,-0.472,-0.285,-0.409,-0.684,-0.621,-0.475,-0.272,-0.252,-0.188,-0.701,-0.718,-0.524,-0.293,-0.271,-0.968,-0.513,-0.637,-0.427,-0.35,-0.325,-0.446,-0.428,-0.262,-0.633,-0.676,-0.698,-0.319,-0.756,-0.718,-0.467,-0.336,-0.363,-0.49,-0.252,-0.124,-0.07,-0.044,-0.0,-0.0,-0.0,0.0,0.0,0.0,0.0,0.0,0.0,-0.0,-0.021,-0.423,-0.944,-0.264,-0.725,-0.675,-0.658,-0.712,-0.885,-0.797,-0.753,-0.821,-0.768,-0.781,-0.825,-1.105,-0.911,-1.084,-0.948,-0.943,-0.9,-1.03,-0.95,-0.587,-0.287,-0.317,-0.416,-0.762,-0.066,-0.623,-0.891,-0.623,-0.778,-0.802,-0.827,-0.644,-0.93,-1.13,-1.045,-1.148,-1.037,-1.055,-0.99,-0.891,-1.064,-0.333,-0.04,-0.397,-0.544,-0.985,-0.6,-0.022,-0.058,-1.023,-0.598,-0.005,-0.302,-0.0,-0.0,-0.191,-0.2,-0.043,-0.038,-0.045,-0.199,-0.262,-0.592,-0.711,-0.78,-0.71,-0.739,-0.753,-0.72,-0.707,-0.721,-0.872,-0.591,0.0,0.0,0.0,-0.0,-0.0,0.0,0.0,-0.697,-0.457,-0.572,-0.496,-0.686,-0.728,-0.628,-0.512,-0.53,-0.451,-0.488,-0.671,-0.522,-0.166,-0.508,-0.493,-0.406,-0.451,-0.528,-0.454,-0.026,-0.491,-0.646,-0.417,-0.587,-0.65,-0.462,-0.022,-0.575,-0.567,-0.55,-0.567,-0.013,-0.019,-0.194,-0.586,-0.537,-0.531,-0.651,-0.26,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,-0.592,-0.583,-0.464,-0.296,-0.809,-0.553,-0.593,-0.328,-0.248,-0.473,-0.503,-0.975,-0.828,-0.751,-0.694,-0.251,-0.431,-0.494,-0.739,-0.564,-0.479,-0.0,-0.0,-0.0,-0.365,-0.638,-0.405,-0.753,-0.657,-0.613,-0.453,-0.515,-0.001,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,-0.0,-0.378,-0.692,-0.916,-0.466,-0.625,-0.806,-0.33,-0.725,-0.588,-0.478,-0.398,-0.748,-0.248,-0.056,-0.514,-0.555,-0.609,-0.659,-0.48,-0.556,-0.377,-0.274,-0.346,-0.699,-0.805,-0.055,-0.556,-0.625,-0.471,-0.668,-0.554,-0.692,-0.343,-0.008,-0.009,-0.653,-0.499,-0.612,-0.303,-0.561,-0.214,-0.374,-0.7,-0.49,-0.535,-0.399,-0.428,-0.462,-0.453,-0.402,-0.433,-0.542,-0.621,-0.659,-0.536,-0.243,-0.0,-0.0,0.0,-0.0,-0.0,-0.0,-0.0,-0.0,0.0,0.0,-0.005,-0.429,-0.707,-0.78,-0.534,-0.562,-0.485,-0.417,-0.359,-0.495,-0.43,-0.396,-0.492,-0.576,-0.477,-0.387,-0.512,-0.218,-0.019,-0.065,-0.784,-0.753,-0.753,-0.744,-0.603,-0.546,-0.426,-0.742,-0.68,-0.666,-0.077,-0.398,-0.501,-0.395,-0.532,-0.587,-0.575,-0.815,-0.365,-0.096,-0.083,-0.654,-0.637,-0.443,-0.447,-0.636,-0.622,-0.524,-0.803,-0.26,-0.0,-0.0,0.0,0.0,-0.0,-0.0,-0.721,-0.714,-0.709,-0.297,-0.661,-0.548,-0.382,-0.06,-0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]}};
+(() => {
+  const $ = id => document.getElementById(id);
+  const MAX_SEC = 600, GOLD = "#f4c242", MUTE = "#6f6a60", DIM = "#4a463e", MID = "#33302a";
+
+  /* ---------- shared waveform drawing ---------- */
+  function sizeCanvas(cv) {
+    const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = Math.max(1, Math.round(w * dpr)); cv.height = Math.round(h * dpr);
+    const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); return { g, w, h };
+  }
+  function drawPeaks(cv, mx, mn, color, progress, playedColor) {
+    const { g, w, h } = sizeCanvas(cv), mid = h / 2, n = mx.length;
+    g.clearRect(0, 0, w, h); g.fillStyle = MID; g.fillRect(0, mid, w, 1);
+    for (let x = 0; x < w; x++) {
+      const i = Math.min(n - 1, Math.floor(x / w * n));
+      const y1 = mid - Math.min(1, mx[i]) * mid, y2 = mid - Math.max(-1, mn[i]) * mid;
+      g.fillStyle = progress != null && x / w <= progress ? playedColor : color;
+      g.fillRect(x, y1, 1, Math.max(1, y2 - y1));
+    }
+    if (progress != null) { g.fillStyle = "#ece7dc"; g.fillRect(Math.round(progress * w), 0, 1, h); }
+  }
+  function peaksFromBuffer(buf, bins) {
+    const d = buf.getChannelData(0), step = d.length / bins, mx = new Float32Array(bins), mn = new Float32Array(bins);
+    for (let b = 0; b < bins; b++) {
+      let a = 0, z = 0; const s = Math.floor(b * step), e = Math.min(d.length, Math.floor((b + 1) * step));
+      for (let i = s; i < e; i++) { const v = d[i]; if (v > a) a = v; if (v < z) z = v; }
+      mx[b] = a; mn[b] = z;
+    }
+    return { max: mx, min: mn };
+  }
+
+  /* ---------- A/B player ---------- */
+  const aB = $("audBefore"), aA = $("audAfter");
+  let active = "after", abPlaying = false;
+  const dur = () => aA.duration || aB.duration || 378;
+  const mmss = t => Math.floor(t / 60) + ":" + String(Math.floor(t % 60)).padStart(2, "0");
+  function drawAB() {
+    const p = (active === "after" ? aA : aB).currentTime / dur();
+    drawPeaks($("cvAbBefore"), PEAKS.before.max, PEAKS.before.min, active === "before" ? "#a6a093" : DIM, p, active === "before" ? GOLD : MUTE);
+    drawPeaks($("cvAbAfter"), PEAKS.after.max, PEAKS.after.min, active === "after" ? "#a6a093" : DIM, p, active === "after" ? GOLD : MUTE);
+    $("abTime").textContent = mmss(p * dur()) + " / " + mmss(dur());
+  }
+  function setActive(which) {
+    active = which;
+    $("abBefore").setAttribute("aria-pressed", which === "before");
+    $("abAfter").setAttribute("aria-pressed", which === "after");
+    $("lblBefore").classList.toggle("on", which === "before");
+    $("lblAfter").classList.toggle("on", which === "after");
+    aB.muted = which !== "before"; aA.muted = which !== "after";
+    drawAB();
+  }
+  function sync(from, to) { if (Math.abs(to.currentTime - from.currentTime) > 0.08) to.currentTime = from.currentTime; }
+  async function abToggle() {
+    if (abPlaying) { aB.pause(); aA.pause(); abPlaying = false; $("abPlay").textContent = "Play"; return; }
+    stopPlay();
+    sync(active === "after" ? aA : aB, active === "after" ? aB : aA);
+    try { await Promise.all([aB.play(), aA.play()]); abPlaying = true; $("abPlay").textContent = "Pause"; loop(); }
+    catch (e) { $("abTime").textContent = "Audio couldn't start. Try again."; }
+  }
+  function loop() {
+    if (!abPlaying) return;
+    sync(aA, aB); drawAB();
+    if (aA.ended) { abPlaying = false; $("abPlay").textContent = "Play"; return; }
+    requestAnimationFrame(loop);
+  }
+  $("abPlay").onclick = abToggle;
+  $("abBefore").onclick = () => setActive("before");
+  $("abAfter").onclick = () => setActive("after");
+  $("abWaves").addEventListener("click", e => {
+    const cv = e.target.closest("canvas"); if (!cv) return;
+    const r = cv.getBoundingClientRect(), t = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * dur();
+    aA.currentTime = t; aB.currentTime = t; drawAB();
+  });
+  aA.addEventListener("loadedmetadata", drawAB);
+  setActive("after");
+
+  /* ---------- desk ---------- */
+  let ctx = null, rawBuf = null, procBuf = null, playing = null, runId = 0, rawPeaks = null, procPeaks = null;
+  const getCtx = () => { if (!ctx) { const C = window.AudioContext || window.webkitAudioContext; ctx = new C(); } return ctx; };
+  const db = x => x > 0 ? 20 * Math.log10(x) : -Infinity;
+  const fmt = (v, u) => isFinite(v) ? (v > 0 ? "+" : "") + v.toFixed(1) + (u ? " " + u : "") : "—";
+  const setStatus = t => { $("status").textContent = t; };
+  function makeBuffer(ch, len, sr) {
+    try { return new AudioBuffer({ numberOfChannels: ch, length: len, sampleRate: sr }); }
+    catch (e) { return getCtx().createBuffer(ch, len, sr); }
+  }
+
+  function makeSample() {
+    const sr = 44100, secs = 14, n = sr * secs, b = makeBuffer(1, n, sr), d = b.getChannelData(0);
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5;
+    const turns = [[0.3, 4.2, 1, 118], [4.8, 8.6, 0.28, 205], [9.1, 13.6, 0.95, 122]];
+    for (let i = 0; i < n; i++) {
+      const t = i / sr; let s = 0;
+      for (const [a, z, g, f0] of turns) {
+        if (t < a || t > z) continue;
+        const syl = Math.max(0, Math.sin(Math.PI * ((t - a) * 3.7))) ** 1.6;
+        const phrase = Math.min(1, (t - a) * 6, (z - t) * 6);
+        const f = f0 * (1 + 0.06 * Math.sin(t * 2.3) + 0.02 * Math.sin(t * 11));
+        let v = 0; for (let h = 1; h <= 9; h++) v += Math.sin(2 * Math.PI * f * h * t + h) / (h * 1.2) * (h === 3 || h === 4 ? 1.8 : 1);
+        s += v * syl * phrase * g * 0.18;
+      }
+      d[i] = s + rnd() * 0.012 + Math.sin(2 * Math.PI * 60 * t) * 0.006;
+    }
+    return b;
+  }
+
+  async function kWeighted(buf) {
+    const off = new OfflineAudioContext(buf.numberOfChannels, buf.length, buf.sampleRate);
+    const src = off.createBufferSource(); src.buffer = buf;
+    const shelf = off.createBiquadFilter(); shelf.type = "highshelf"; shelf.frequency.value = 1681; shelf.gain.value = 4;
+    const hp = off.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 38; hp.Q.value = 0.5;
+    src.connect(shelf).connect(hp).connect(off.destination); src.start();
+    return off.startRendering();
+  }
+  function blockPowers(kb, winSec, hopSec) {
+    const sr = kb.sampleRate, win = Math.round(winSec * sr), hop = Math.round(hopSec * sr), out = [];
+    const chans = []; for (let c = 0; c < kb.numberOfChannels; c++) chans.push(kb.getChannelData(c));
+    // running sums for speed on long files
+    const cums = chans.map(d => { const s = new Float64Array(d.length + 1); for (let i = 0; i < d.length; i++) s[i + 1] = s[i] + d[i] * d[i]; return s; });
+    for (let s = 0; s + win <= kb.length; s += hop) { let z = 0; for (const c of cums) z += (c[s + win] - c[s]) / win; out.push(z); }
+    return out;
+  }
+  const lk = z => -0.691 + 10 * Math.log10(z);
+  async function measure(buf) {
+    const kb = await kWeighted(buf);
+    const blocks = blockPowers(kb, 0.4, 0.1).filter(z => lk(z) > -70);
+    let integrated = -Infinity;
+    if (blocks.length) {
+      const rel = lk(blocks.reduce((a, b) => a + b, 0) / blocks.length) - 10;
+      const g = blocks.filter(z => lk(z) > rel);
+      if (g.length) integrated = lk(g.reduce((a, b) => a + b, 0) / g.length);
+    }
+    const st = blockPowers(kb, 3, 1).map(lk).filter(v => v > -70 && v > integrated - 20).sort((a, b) => a - b);
+    let spread = NaN;
+    if (st.length > 2) spread = st[Math.ceil(st.length * 0.95) - 1] - st[Math.floor(st.length * 0.1)];
+    let peak = 0;
+    for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > peak) peak = a; } }
+    return { lufs: integrated, peak: db(peak), spread };
+  }
+  async function processBuf(buf, target, ceiling, inM) {
+    const off = new OfflineAudioContext(buf.numberOfChannels, buf.length, buf.sampleRate);
+    const src = off.createBufferSource(); src.buffer = buf;
+    const hp = off.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 80; hp.Q.value = 0.7;
+    const pre = off.createGain(); pre.gain.value = isFinite(inM.lufs) ? Math.pow(10, (-20 - inM.lufs) / 20) : 1;
+    const comp = off.createDynamicsCompressor();
+    comp.threshold.value = -30; comp.knee.value = 12; comp.ratio.value = 4; comp.attack.value = 0.015; comp.release.value = 0.35;
+    src.connect(hp).connect(pre).connect(comp).connect(off.destination); src.start();
+    const mid = await off.startRendering();
+    const m = await measure(mid);
+    const g = isFinite(m.lufs) ? Math.pow(10, (target - m.lufs) / 20) : 1;
+    const ceil = Math.pow(10, ceiling / 20), sr = mid.sampleRate, rel = 1 - Math.exp(-1 / (0.08 * sr));
+    const out = makeBuffer(mid.numberOfChannels, mid.length, sr), ins = [], outs = [];
+    for (let c = 0; c < mid.numberOfChannels; c++) { ins.push(mid.getChannelData(c)); outs.push(out.getChannelData(c)); }
+    let env = 1;
+    for (let i = 0; i < mid.length; i++) {
+      let pk = 0; for (const d of ins) { const a = Math.abs(d[i] * g); if (a > pk) pk = a; }
+      const want = pk > ceil ? ceil / pk : 1;
+      env = want < env ? want : env + (want - env) * rel;
+      for (let c = 0; c < ins.length; c++) outs[c][i] = ins[c][i] * g * env;
+    }
+    return out;
+  }
+  function drawDesk() {
+    if (rawPeaks) drawPeaks($("cvBefore"), rawPeaks.max, rawPeaks.min, "#a6a093"); else drawPeaks($("cvBefore"), [0], [0], "#a6a093");
+    if (procPeaks) drawPeaks($("cvAfter"), procPeaks.max, procPeaks.min, GOLD); else drawPeaks($("cvAfter"), [0], [0], GOLD);
+  }
+  async function run() {
+    if (!rawBuf) return;
+    const id = ++runId; stopPlay();
+    const [t, c] = $("target").value.split("|").map(Number);
+    setStatus(rawBuf.duration > 60 ? "Processing " + Math.round(rawBuf.duration / 60) + " minutes of audio. This takes a few seconds…" : "Processing…");
+    $("playProc").disabled = true;
+    await new Promise(r => setTimeout(r, 30));
+    try {
+      const a = await measure(rawBuf);
+      const p = await processBuf(rawBuf, t, c, a);
+      const b = await measure(p);
+      if (id !== runId) return;
+      procBuf = p; procPeaks = peaksFromBuffer(p, 900);
+      $("mLufsA").textContent = fmt(a.lufs); $("mLufsB").textContent = fmt(b.lufs);
+      $("mPkA").textContent = fmt(a.peak); $("mPkB").textContent = fmt(b.peak);
+      $("mSpA").textContent = isFinite(a.spread) ? a.spread.toFixed(1) + " dB" : "—";
+      $("mSpB").textContent = isFinite(b.spread) ? b.spread.toFixed(1) + " dB" : "—";
+      $("rawLabel").textContent = fmt(a.lufs, "LUFS"); $("procLabel").textContent = fmt(b.lufs, "LUFS");
+      drawDesk(); setStatus("Ready. Play the raw and house versions to compare.");
+    } catch (e) { setStatus("This file couldn't be processed in the browser. Try a WAV or MP3."); }
+    $("playProc").disabled = false;
+  }
+  function stopPlay() { if (playing) { try { playing.stop(); } catch (e) {} playing = null; } }
+  async function play(buf) {
+    if (!buf) return;
+    if (abPlaying) abToggle();
+    const c = getCtx(); if (c.state === "suspended") await c.resume();
+    stopPlay(); const s = c.createBufferSource(); s.buffer = buf; s.connect(c.destination); s.start(); playing = s;
+    s.onended = () => { if (playing === s) playing = null; };
+  }
+  $("playRaw").onclick = () => play(rawBuf);
+  $("playProc").onclick = () => play(procBuf);
+  $("stop").onclick = stopPlay;
+  $("target").addEventListener("change", run);
+
+  function setRaw(buf, label) {
+    if (buf.duration > MAX_SEC) {
+      const len = Math.floor(MAX_SEC * buf.sampleRate), cut = makeBuffer(buf.numberOfChannels, len, buf.sampleRate);
+      for (let c = 0; c < buf.numberOfChannels; c++) cut.copyToChannel(buf.getChannelData(c).subarray(0, len), c);
+      buf = cut;
+    }
+    rawBuf = buf; rawPeaks = peaksFromBuffer(buf, 900); procPeaks = null;
+    $("nowfile").textContent = label + " · " + mmss(buf.duration) + (buf.duration >= MAX_SEC ? " (first 10 minutes)" : "");
+    drawDesk(); return run();
+  }
+  async function loadArrayBuffer(data, label) {
+    const buf = await getCtx().decodeAudioData(data);
+    return setRaw(buf, label);
+  }
+  async function loadFile(f) {
+    if (!f) return;
+    setStatus("Reading " + f.name + "…");
+    try { await loadArrayBuffer(await f.arrayBuffer(), f.name); }
+    catch (e) { setStatus("That file couldn't be read. Try a WAV, MP3 or M4A."); }
+  }
+  $("loadWedding").onclick = async () => {
+    setStatus("Loading the raw wedding mix…");
+    try { const r = await fetch("/media/before.mp3"); if (!r.ok) throw 0; await loadArrayBuffer(await r.arrayBuffer(), "Wedding highlight · raw edit"); }
+    catch (e) { setStatus("The wedding mix couldn't be loaded here. Drop a file instead."); }
+  };
+  $("loadSample").onclick = () => setRaw(makeSample(), "Sample · two voices, one sitting 11 dB under the other, with hiss");
+  const drop = $("drop"), input = $("file");
+  drop.onclick = () => input.click();
+  drop.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } };
+  input.onchange = () => loadFile(input.files[0]);
+  ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", e => loadFile(e.dataTransfer.files[0]));
+
+  const slug = s => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "untitled";
+  const pad = v => String(Math.max(1, parseInt(v, 10) || 1)).padStart(2, "0");
+  function name() {
+    const [t] = $("target").value.split("|");
+    $("fname").textContent = "TP_W" + pad($("wk").value) + "_D" + pad($("dy").value) + "_" + slug($("ttl").value) + "_v01_" + t.replace("-", "m") + "LUFS.wav";
+  }
+  ["wk", "dy", "ttl"].forEach(i => $(i).addEventListener("input", name));
+  $("target").addEventListener("change", name); name();
+
+  $("copyMail").onclick = async () => {
+    const t = $("mail").textContent;
+    try { await navigator.clipboard.writeText(t); $("copyNote").textContent = "Copied."; }
+    catch (e) { const r = document.createRange(); r.selectNodeContents($("mail")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $("copyNote").textContent = "Selected. Press copy to take it."; }
+  };
+
+  window.addEventListener("resize", () => { drawAB(); drawDesk(); });
+  setRaw(makeSample(), "Sample · two voices, one sitting 11 dB under the other, with hiss");
+})();
+</script>
+
+</body>
+</html>
