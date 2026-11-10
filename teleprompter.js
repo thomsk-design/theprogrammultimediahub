@@ -78,6 +78,7 @@
           <div class="prompter-guide" aria-hidden="true"></div>
           <div class="prompter-vu" aria-hidden="true"><span></span><i></i></div>
           <div class="prompter-viewport" tabindex="0" aria-label="Script reader. Use Space to pause or resume."><div class="prompter-text"></div></div>
+          <div class="prompter-shade" aria-hidden="true"></div>
           <div class="prompter-cue" data-p-cue hidden><div class="pc-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="pc-track" cx="60" cy="60" r="52"/><circle class="pc-arc" cx="60" cy="60" r="52" pathLength="100"/></svg><strong data-p-cue-num></strong></div><div class="pc-label" data-p-cue-label></div></div>
           <button class="prompter-unfocus" data-p-unfocus title="Show controls (H)">Show controls</button>
         </div>
@@ -115,6 +116,7 @@
 
     // ---- Word tracking: listen to the words and keep the script on the line being read ----
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let vel = 0, pVel = 0, sIdx = 0, sVel = 0, rows = [], wordRow = [], rowsDirty = true, quietSince = 0, lastTiming = 0;
     let words = [], cursor = 0, rec = null, recWanted = false, recWhere = '', wordsOn = false, wordsFailed = false, paceLog = [], prerollUntil = 0;
     function normWord(word) { return word.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]/g, ''); }
     const same = (a, b) => a === b || (a.length > 3 && b.length > 3 && (a.startsWith(b) || b.startsWith(a)));
@@ -124,6 +126,46 @@
       const now = q('.prompter-text .w.now');
       if (now) now.classList.remove('now');
       if (words[cursor] && wordsOn) words[cursor].el.classList.add('now');
+    }
+    // Smooth scrolling: whole pixels via scrollTop, the fraction via transform.
+    function setScroll(p) {
+      position = Math.max(0, p);
+      const whole = Math.floor(position);
+      viewport.scrollTop = whole;
+      q('.prompter-text').style.transform = `translateY(${(whole - viewport.scrollTop) - (position - whole)}px)`;
+    }
+    function settleScroll() { q('.prompter-text').style.transform = ''; position = viewport.scrollTop; }
+    // Rows of text (and cue boxes) so the scroll can glide through a line as its words are read.
+    function layout() {
+      const items = words.map((w, i) => ({ top: offsetOf(w.el), i })).concat(cues.map(c => ({ top: offsetOf(c.element), cue: c })));
+      items.sort((a, b) => a.top - b.top);
+      rows = []; wordRow = new Array(words.length);
+      for (const it of items) {
+        let row = rows[rows.length - 1];
+        if (!row || it.cue || row.cue || Math.abs(it.top - row.top) > 4) { row = { top: it.top, first: null, count: 0, cue: it.cue || null }; rows.push(row); }
+        if (it.i !== undefined) { if (row.first === null) row.first = it.i; row.count++; wordRow[it.i] = rows.length - 1; }
+      }
+      rowsDirty = false;
+    }
+    function yFor(f) {
+      if (!words.length) return position;
+      if (rowsDirty) layout();
+      const i = Math.min(words.length - 1, Math.max(0, Math.floor(f)));
+      const frac = Math.min(1, Math.max(0, f - i));
+      const r = wordRow[i], row = rows[r], next = rows[r + 1];
+      const span = next ? next.top - row.top : 0;
+      return row.top + span * (i - row.first + frac) / row.count;
+    }
+    // A pause starts when the talent goes quiet within the last couple of words before it,
+    // even if speech recognition missed those words.
+    function cueIfNear() {
+      const c = cues.find(c => !completedCues.has(c.index) && c.wordIndex > cursor && c.wordIndex - cursor <= 2);
+      if (!c) return;
+      const from = cursor;
+      cursor = c.wordIndex;
+      paintWords(from, cursor);
+      activeCue = c;
+      c.remaining = c.seconds;
     }
     function clearWords() { for (const w of words) w.el.classList.remove('said', 'now'); }
     function advanceTo(n, strong) {
@@ -166,6 +208,7 @@
       const index = words.findIndex(w => offsetOf(w.el) >= viewport.scrollTop - 4);
       cursor = index < 0 ? words.length : index;
       clearWords(); paintWords(0, cursor);
+      sIdx = cursor; sVel = 0;
       for (const c of cues) if (c.wordIndex < cursor || (c.wordIndex === cursor && cursor > 0 && offsetOf(c.element) < viewport.scrollTop - 4)) completedCues.add(c.index);
     }
     function modeLabel() {
@@ -190,6 +233,7 @@
         let text = '';
         for (let i = 0; i < event.results.length; i++) text += ' ' + event.results[i][0].transcript;
         align((text.match(/\S+/g) || []).map(normWord).filter(Boolean));
+        if (!activeCue && event.results[event.results.length - 1].isFinal) cueIfNear();
       };
       r.onerror = event => {
         if (rec !== r || ['no-speech', 'aborted'].includes(event.error)) return;
@@ -300,6 +344,7 @@
         target.append(element);
       }
       measure();
+      rowsDirty = true;
       syncCues();
     }
 
@@ -331,6 +376,8 @@
 
     function pause(message = 'Paused. Take your time.') {
       playing = false;
+      vel = 0; sVel = 0; pVel = 0;
+      settleScroll();
       prerollUntil = 0;
       if (rec) stopRecognition();
       holding = false;
@@ -357,12 +404,26 @@
         const hearing = listening();
         elapsed += dt;
         if (wordsOn) {
+          const now = performance.now(), lv = audio && audio.level.connected ? audio.level : null;
+          if (lv) { if (lv.voice) quietSince = 0; else if (!quietSince) quietSince = now; }
+          if (!activeCue && lv && quietSince && now - quietSince > 450) cueIfNear();
           if (activeCue) {
             if (!(audio && audio.level.connected) || !audio.level.voice) activeCue.remaining = Math.max(0, activeCue.remaining - dt * speed / 40);
             if (activeCue.remaining === 0) { completedCues.add(activeCue.index); activeCue = null; goUntil = performance.now() + 900; paintWords(cursor, cursor); }
           }
-          const el = activeCue ? activeCue.element : (words[cursor] || words[words.length - 1] || {}).el;
-          if (el) { position += (offsetOf(el) - position) * Math.min(1, dt * 4); viewport.scrollTop = position; }
+          // Glide toward the reading position with a critically damped spring (no snapping).
+          const pending = cues.find(c => !completedCues.has(c.index) && c !== activeCue && c.wordIndex >= cursor);
+          let t = activeCue ? activeCue.wordIndex : cursor + (lv ? (lv.voice ? 0.7 : 0) : 0.4);
+          if (pending && pending.wordIndex > 0) t = Math.min(t, pending.wordIndex - 0.001);
+          t = Math.min(t, words.length);
+          const w = 2.6;
+          sVel += (w * w * (t - sIdx) - 2 * w * sVel) * dt;
+          sIdx += sVel * dt;
+          const targetY = activeCue ? offsetOf(activeCue.element) : yFor(sIdx);
+          // Second spring on pixels so jumps (into a pause, or catching up) glide instead of snap.
+          const pw = 4.5;
+          pVel += (pw * pw * (targetY - position) - 2 * pw * pVel) * dt;
+          setScroll(position + pVel * dt);
           status(activeCue ? (audio && audio.level.voice ? 'Waiting for quiet before the silence counts down.' : 'Hold the silence…') : cursor === 0 ? 'Listening… start reading and the script will follow your words.' : 'Following your words.');
         } else if (activeCue) {
           // With the mic on, a silence only counts down while the room is actually quiet.
@@ -371,18 +432,23 @@
           else status(hearing && audio.level.voice ? 'Waiting for quiet before the silence counts down.' : 'Hold the silence…');
         } else {
           holding = hearing && !audio.level.voice && performance.now() > goUntil;
-          if (!holding) {
-            const next = cues.find(c => !completedCues.has(c.index) && cuePosition(c) <= position + speed * dt);
+          // Ease in and out of movement, and slow gently into the next pause.
+          let targetVel = holding ? 0 : speed;
+          const ahead = cues.find(c => !completedCues.has(c.index) && cuePosition(c) >= position - 1);
+          if (ahead && !holding) targetVel = Math.min(targetVel, Math.max(12, (cuePosition(ahead) - position) * 2.5));
+          vel += (targetVel - vel) * Math.min(1, dt * 4);
+          if (vel > 0.3) {
+            const next = cues.find(c => !completedCues.has(c.index) && cuePosition(c) <= position + vel * dt);
             if (next) {
-              position = Math.max(position, cuePosition(next));
+              setScroll(Math.max(position, cuePosition(next)));
               activeCue = next;
               activeCue.remaining = activeCue.seconds;
-            } else position += speed * dt;
-            viewport.scrollTop = position;
+              vel = 0;
+            } else setScroll(position + vel * dt);
           }
           status(hearing ? (holding ? (position < 1 ? 'Listening… start speaking and the script will follow you.' : 'Holding with you. Carry on when you’re ready.') : 'Following your voice.') : 'Reading · your pace, your pauses.');
         }
-        timing();
+        if (time - lastTiming > 150) { lastTiming = time; timing(); } else updateCue();
       }
       last = time;
       if (wordsOn ? cursor >= words.length && !activeCue && cues.every(c => completedCues.has(c.index)) : !activeCue && cues.every(c => completedCues.has(c.index)) && viewport.scrollTop >= viewport.scrollHeight - viewport.clientHeight - 1) {
@@ -404,6 +470,7 @@
         prerollUntil = performance.now() + 3000;
       }
       position = viewport.scrollTop;
+      sIdx = cursor; sVel = 0; vel = 0; pVel = 0; quietSince = 0;
       if (follow && SR && !wordsFailed) { startRecognition(); syncCursor(); }
       playing = true;
       last = null;
@@ -439,6 +506,7 @@
       q('[data-p-speed-label]').textContent = `${speed} px/s`;
       q('[data-p-size-label]').textContent = `${size} px`;
       q('.prompter-text').style.fontSize = `${size}px`;
+      rowsDirty = true;
       q('[data-p-follow]').checked = follow;
       measure();
       timing();
@@ -449,6 +517,7 @@
       elapsed = 0; activeCue = null; completedCues.clear(); goUntil = 0;
       fresh = true; currentTake = null;
       cursor = 0; paceLog = []; clearWords();
+      sIdx = 0; sVel = 0; vel = 0; settleScroll();
       for (const cue of cues) cue.remaining = cue.seconds;
       timing();
       q('[data-p-play]').textContent = 'Start';
@@ -639,7 +708,7 @@
     });
     const onVisibility = () => { if (document.hidden && playing) pause(); };
     document.addEventListener('visibilitychange', onVisibility);
-    const onResize = () => { measure(); if (!playing) syncCues(); };
+    const onResize = () => { measure(); rowsDirty = true; if (!playing) syncCues(); };
     window.addEventListener('resize', onResize);
     dialog.addEventListener('close', () => {
       pause();

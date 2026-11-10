@@ -50,7 +50,9 @@ dialog.prompter .prompter-reader[hidden],dialog.prompter .prompter-editor[hidden
 
 /* Stage */
 .prompter-stage{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
-.prompter-stage .prompter-viewport{border:0;-webkit-mask-image:linear-gradient(rgba(0,0,0,.38) 0,rgba(0,0,0,.38) calc(15vh - 18px),#000 calc(15vh + 4px),#000 72%,rgba(0,0,0,.45) 100%);mask-image:linear-gradient(rgba(0,0,0,.38) 0,rgba(0,0,0,.38) calc(15vh - 18px),#000 calc(15vh + 4px),#000 72%,rgba(0,0,0,.45) 100%)}
+.prompter-stage .prompter-viewport{border:0}
+.prompter-stage .prompter-text{will-change:transform}
+.prompter-shade{position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(rgba(27,24,20,.64) 0,rgba(27,24,20,.64) calc(15vh - 18px),rgba(27,24,20,0) calc(15vh + 4px),rgba(27,24,20,0) 72%,rgba(22,20,17,.55) 100%)}
 .prompter-guide{position:absolute;left:0;right:0;top:15vh;height:0;border-top:1px dashed rgba(244,193,68,.28);z-index:2;pointer-events:none}
 .prompter-guide::before,.prompter-guide::after{content:'';position:absolute;top:-8px;border:7px solid transparent}
 .prompter-guide::before{left:6px;border-left:11px solid var(--gold)}.prompter-guide::after{right:6px;border-right:11px solid var(--gold)}
