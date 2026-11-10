@@ -4,7 +4,8 @@
 (() => {
   const SUPABASE_URL = 'https://etukrfqlrhiepsedrvzr.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_QV-frUgCkQ02FEd_8_C8wg_Bnfuvid3'; // publishable key: safe in the browser, access is enforced by row-level security
-  const KINDS = ['assets', 'sessions', 'scripts', 'sops', 'tasks'];
+  const KINDS = ['assets', 'sessions', 'scripts', 'sops', 'tasks', 'files'];
+  const list = kind => (Array.isArray(state[kind]) ? state[kind] : (state[kind] = []));
   const SEP = '\u0000';
   const keyOf = (kind, id) => kind + SEP + id;
   const originalSave = window.save, originalLanding = window.showLanding;
@@ -122,12 +123,12 @@
 
   // ---- Sync ----
   function order(kind, list) {
-    const index = new Map(state[kind].map((d, i) => [d.id, i]));
+    const index = new Map(list(kind).map((d, i) => [d.id, i]));
     return list.sort((a, b) => (index.has(a.id) ? index.get(a.id) : 1e9) - (index.has(b.id) ? index.get(b.id) : 1e9) || String(a.id).localeCompare(String(b.id)));
   }
   function dirty() {
-    for (const kind of KINDS) for (const d of state[kind]) if (synced.get(keyOf(kind, d.id)) !== JSON.stringify(d)) return true;
-    const live = new Set(KINDS.flatMap(kind => state[kind].map(d => keyOf(kind, d.id))));
+    for (const kind of KINDS) for (const d of list(kind)) if (synced.get(keyOf(kind, d.id)) !== JSON.stringify(d)) return true;
+    const live = new Set(KINDS.flatMap(kind => list(kind).map(d => keyOf(kind, d.id))));
     return [...synced.keys()].some(key => !live.has(key));
   }
   async function pull(first) {
@@ -136,16 +137,18 @@
     if (first && !data.length && member.role === 'admin') { // first sign-in: this browser's workspace becomes the team workspace
       synced = new Map();
       await push(true);
+      loadSettings();
       return false;
     }
-    const before = JSON.stringify(KINDS.map(kind => state[kind]));
+    const before = JSON.stringify(KINDS.map(kind => list(kind)));
+    loadSettings();
     const next = {};
     for (const kind of KINDS) next[kind] = [];
     for (const row of data) if (next[row.kind]) next[row.kind].push(row.data);
     for (const kind of KINDS) state[kind] = order(kind, next[kind]);
     synced = new Map(data.map(row => [keyOf(row.kind, row.id), JSON.stringify(row.data)]));
     originalSave(); // keep a local copy for quick loading
-    return before !== JSON.stringify(KINDS.map(kind => state[kind]));
+    return before !== JSON.stringify(KINDS.map(kind => list(kind)));
   }
   async function push(now) {
     clearTimeout(timer);
@@ -155,7 +158,7 @@
     badge('Saving…');
     try {
       const rows = [], live = new Set(), stamp = new Date().toISOString();
-      for (const kind of KINDS) for (const d of state[kind]) {
+      for (const kind of KINDS) for (const d of list(kind)) {
         const key = keyOf(kind, d.id), json = JSON.stringify(d);
         live.add(key);
         if (synced.get(key) !== json) rows.push({ kind, id: d.id, data: d, updated_at: stamp, updated_by: userId });
@@ -201,6 +204,26 @@
   }
   window.addEventListener('focus', refresh);
   setInterval(refresh, 45000);
+
+  // ---- Shared settings + API for other parts of the hub ----
+  const settings = {};
+  async function loadSettings() {
+    const { data } = await sb.from('program_settings').select('key,value');
+    for (const k of Object.keys(settings)) delete settings[k];
+    for (const row of data || []) settings[row.key] = row.value;
+    document.dispatchEvent(new CustomEvent('hub:settings'));
+  }
+  window.HubCloud = {
+    member: () => member,
+    settings,
+    async token() { if (!sb) return null; const { data: { session } } = await sb.auth.getSession(); return session ? session.access_token : null; },
+    async setSetting(key, value) {
+      const { error } = await sb.from('program_settings').upsert({ key, value, updated_at: new Date().toISOString(), updated_by: userId });
+      if (error) throw error;
+      settings[key] = value;
+      document.dispatchEvent(new CustomEvent('hub:settings'));
+    },
+  };
 
   // ---- Workspace chrome ----
   function badge(text) { lastBadge = text; decorate(); }

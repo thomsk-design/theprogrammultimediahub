@@ -1,7 +1,7 @@
 (() => {
   const storageKey = 'program-teleprompter-v1';
   const audio = window.TalentAudio;
-  let draft = '', speed = 40, size = 44, follow = false, recOn = false;
+  let draft = '', speed = 40, size = 44, follow = false, recOn = false, driveUp = true;
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
     draft = typeof saved.text === 'string' ? saved.text : '';
@@ -9,6 +9,7 @@
     size = Math.min(80, Math.max(24, Number(saved.size) || 44));
     follow = saved.follow === true;
     recOn = saved.rec === true;
+    driveUp = saved.driveUp !== false;
   } catch {}
   // [SILENCE: ~3 SECONDS], [Pause: 5s], plain [Pause] (2s) and [Breath] (1s)
   const cuePattern = /\[\s*(silence|pause|breath)\s*(?::\s*(?:\\?~\s*)?(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)?)?\s*\]/gi;
@@ -84,6 +85,7 @@
           <section><h3>Backup recording</h3>
             <label class="dr-check"><input type="checkbox" data-p-rec-on> Record each take to a folder</label>
             <div class="dr-row"><button class="btn" data-p-folder>Choose folder…</button><span class="dr-folder" data-p-folder-name></span></div>
+            <label class="dr-check" data-p-drive-row hidden><input type="checkbox" data-p-drive> Also upload each take to Google Drive</label>
             <p class="dr-note" data-p-rec-note></p>
           </section>
           <section><h3>Script</h3>
@@ -386,7 +388,7 @@
     function persist() {
       draft = input.value;
       try {
-        localStorage.setItem(storageKey, JSON.stringify({ text: draft, speed, size, follow, rec: recOn }));
+        localStorage.setItem(storageKey, JSON.stringify({ text: draft, speed, size, follow, rec: recOn, driveUp }));
         localStorage.setItem(emphasisKey, JSON.stringify({ text: input.value, ranges, source: script ? script.body : null }));
         q('[data-p-saved]').textContent = 'Saved in this browser only.';
       } catch { q('[data-p-saved]').textContent = 'Browser storage unavailable. Keep a copy of your script before closing.'; }
@@ -512,7 +514,7 @@
     }
     function takeLogText() {
       const lines = ['THE PROGRAM · TAKE LOG', `Script: ${script ? script.title + ' · v' + script.version : 'Teleprompter draft'}`, `Date: ${today()}`, 'Times are this computer’s clock. Match them to the recorder’s file times.', ''];
-      for (const t of takes) lines.push(`Take ${t.take} · started ${t.started} · length ${t.length}${t.input ? ' · mic: ' + t.input : ''}`, ...(t.file ? [`   Backup file: ${t.file}`] : []), ...t.markers.map((m, i) => `   Marker ${i + 1}: ${m}`));
+      for (const t of takes) lines.push(`Take ${t.take} · started ${t.started} · length ${t.length}${t.input ? ' · mic: ' + t.input : ''}`, ...(t.file ? [`   Backup file: ${t.file}`] : []), ...(t.drive ? [`   Google Drive: ${t.drive}`] : []), ...t.markers.map((m, i) => `   Marker ${i + 1}: ${m}`));
       if (!takes.length) lines.push('No takes recorded yet.');
       return lines.join('\n') + '\n';
     }
@@ -672,6 +674,9 @@
       q('[data-p-rec-note]').textContent = canPickFolder
         ? 'Saves a 24-bit WAV of the mic feed for every take, plus the take log. The H2 still keeps its own recording.'
         : 'This browser can’t write to a folder, so each take downloads as a WAV when it ends. Use Chrome to save straight to a folder.';
+      const drive = !!(window.HubDrive && HubDrive.connected());
+      q('[data-p-drive-row]').hidden = !drive;
+      q('[data-p-drive]').checked = driveUp;
       q('[data-p-rec]').hidden = !recorder;
       if (!recorder) q('[data-p-rec]').textContent = '';
     }
@@ -679,8 +684,8 @@
       try { folder = await window.showDirectoryPicker({ id: 'program-takes', mode: 'readwrite' }); saveFolder(folder); recUi(); return true; }
       catch { return false; }
     }
-    function fileTarget(writable) {
-      return { write: bytes => writable.write(bytes), async finish(header) { await writable.write({ type: 'write', position: 0, data: header }); await writable.close(); } };
+    function fileTarget(writable, handle) {
+      return { write: bytes => writable.write(bytes), async finish(header) { await writable.write({ type: 'write', position: 0, data: header }); await writable.close(); }, blob: () => handle.getFile() };
     }
     function downloadTarget(name) {
       const chunks = [];
@@ -688,7 +693,9 @@
         async write(bytes) { chunks.push(bytes); },
         async finish(header) {
           chunks[0] = header;
-          const url = URL.createObjectURL(new Blob(chunks, { type: 'audio/wav' }));
+          const file = new Blob(chunks, { type: 'audio/wav' });
+          this.blob = async () => file;
+          const url = URL.createObjectURL(file);
           const a = document.createElement('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
           setTimeout(() => URL.revokeObjectURL(url), 5000);
         },
@@ -706,10 +713,13 @@
         if (folder && (await folder.queryPermission({ mode: 'readwrite' })) !== 'granted' && (await folder.requestPermission({ mode: 'readwrite' })) !== 'granted') throw new Error('folder access wasn’t allowed');
         if (!(audio && audio.level.connected)) await connectMic(q('[data-p-device]').value);
         if (!(audio && audio.level.connected)) throw new Error('the microphone isn’t connected');
-        const target = folder ? fileTarget(await (await folder.getFileHandle(name, { create: true })).createWritable()) : downloadTarget(name);
+        const handle = folder ? await folder.getFileHandle(name, { create: true }) : null;
+        const target = handle ? fileTarget(await handle.createWritable(), handle) : downloadTarget(name);
         if (take !== currentTake) { await target.finish(new Uint8Array(44)).catch(() => {}); return; }
         recorder = await audio.startRecording(target);
         recorder.take = take;
+        recorder.target = target;
+        recorder.name = name;
         take.file = folder ? `${folder.name}/${name}` : `Downloads/${name}`;
         saveTakes();
         recUi();
@@ -727,6 +737,7 @@
       try {
         const result = await r.stop();
         status(`Saved take ${r.take.take} backup · ${formatTime(result.seconds)} · ${r.take.file}`);
+        if (driveUp && window.HubDrive && HubDrive.connected() && r.target.blob) uploadTake(r);
       } catch (error) {
         status(`The backup for take ${r.take.take} couldn’t be saved (${error.message}). The H2 still has its recording.`);
       }
@@ -742,6 +753,21 @@
       recUi();
     };
     q('[data-p-folder]').onclick = () => pickFolder();
+    q('[data-p-drive]').onchange = event => { driveUp = event.target.checked; persist(); };
+    async function uploadTake(r) {
+      const take = r.take;
+      try {
+        const blob = await r.target.blob();
+        const file = await HubDrive.upload(blob, { name: r.name, type: 'audio/wav', folder: '01_Incoming', onProgress: p => { if (p < 1) status(`Uploading take ${take.take} to Google Drive… ${Math.round(p * 100)}%`); } });
+        take.drive = file.link;
+        saveTakes();
+        HubDrive.addFile(file, { source: 'Teleprompter', take: take.take, script: script ? script.title : 'Teleprompter draft' });
+        status(`Take ${take.take} is in Google Drive · ${file.folder}`);
+        writeLogToFolder();
+      } catch (error) {
+        status(`Take ${take.take} is saved on this computer but didn’t reach Google Drive (${error.message}).`);
+      }
+    }
     loadFolder().then(handle => { if (handle && !folder) { folder = handle; recUi(); } });
     const recTimer = setInterval(() => { if (recorder) q('[data-p-rec]').textContent = `REC ${formatTime(recorder.seconds)}`; }, 500);
 
