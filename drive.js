@@ -127,8 +127,28 @@ window.HubDrive = (() => {
     const files = (state.files || []).slice().sort((a, b) => String(b.uploadedAt).localeCompare(String(a.uploadedAt)));
     if (!D.connected() && !files.length) return '';
     const when = d => new Date(d).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-    return `<section class="panel mt"><div class="panel-head"><h2>In Google Drive</h2><span class="small muted">${files.length} file${files.length === 1 ? '' : 's'}</span></div>${files.length ? `<div class="table-wrap"><table><thead><tr><th>File</th><th>Folder</th><th>Size</th><th>Added</th><th></th></tr></thead><tbody>${files.slice(0, 60).map(f => `<tr><td class="wrap">${esc(f.name)}${f.take ? `<small class="muted"> · take ${esc(f.take)}</small>` : ''}</td><td class="wrap small muted">${esc(f.folder || '')}</td><td>${((f.size || 0) / 1048576).toFixed(1)} MB</td><td class="small muted">${esc(when(f.uploadedAt))}${f.by ? ' · ' + esc(f.by) : ''}</td><td><a class="text-link" href="${esc(f.link)}" target="_blank" rel="noopener">Open ↗</a></td></tr>`).join('')}</tbody></table></div>` : empty('Uploaded files and teleprompter takes will appear here.')}</section>`;
+    return `<section class="panel mt"><div class="panel-head"><h2>In Google Drive</h2><span class="small muted">${files.length} file${files.length === 1 ? '' : 's'}</span></div>${files.length ? `<div class="table-wrap"><table><thead><tr><th>File</th><th>Folder</th><th>Size</th><th>Added</th><th></th></tr></thead><tbody>${files.slice(0, 60).map(f => `<tr><td class="wrap">${esc(f.name)}${f.take ? `<small class="muted"> · take ${esc(f.take)}</small>` : ''}</td><td class="wrap small muted">${esc(f.folder || '')}</td><td>${((f.size || 0) / 1048576).toFixed(1)} MB</td><td class="small muted">${esc(when(f.uploadedAt))}${f.by ? ' · ' + esc(f.by) : ''}</td><td class="row" style="gap:12px;justify-content:flex-end"><a class="text-link" href="${esc(f.link)}" target="_blank" rel="noopener">Open ↗</a>${isStaff() ? `<button class="text-link danger-link" data-drive-remove="${esc(f.id)}">Remove</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : empty('Uploaded files and teleprompter takes will appear here.')}</section>`;
   };
+
+  async function removeFile(id) {
+    const f = (state.files || []).find(x => x.id === id);
+    if (!f) return;
+    confirmAction(`Move “${f.name}” to the Google Drive trash and remove it from the hub? Drive keeps trashed files for 30 days.`, async () => {
+      $('#dialog').close();
+      let note = 'Moved to the Google Drive trash';
+      try { const r = await D.call('trash', { id }); if (r.gone) note = 'Already deleted in Drive · removed from the list'; }
+      catch (error) {
+        if (/Unknown action/.test(error.message)) note = 'Removed from the list. Update the Drive bridge (Connections) so Remove also trashes the file in Drive.';
+        else { toast('Couldn’t remove it: ' + error.message); return; }
+      }
+      state.files = state.files.filter(x => x.id !== id);
+      save(); render(); toast(note);
+    });
+  }
+  document.addEventListener('click', event => {
+    const b = event.target.closest('[data-drive-remove]');
+    if (b) removeFile(b.dataset.driveRemove);
+  });
 
   // ---- Connections page: connect / check the Drive bridge ----
   function guide() {
@@ -149,7 +169,7 @@ window.HubDrive = (() => {
     box.className = 'drive-connect';
     const url = (window.HubCloud && HubCloud.settings.drive_bridge && HubCloud.settings.drive_bridge.url) || '';
     if (D.connected()) {
-      box.innerHTML = `<div class="small" data-drive-state>Checking the Next to Kin Drive…</div><div class="row mt"><a class="btn" data-drive-open hidden target="_blank" rel="noopener">Open hub folder ↗</a>${isAdmin() ? '<button class="btn" data-drive-edit>Change bridge</button>' : ''}</div>`;
+      box.innerHTML = `<div class="small" data-drive-state>Checking the Next to Kin Drive…</div><div class="row mt"><a class="btn" data-drive-open hidden target="_blank" rel="noopener">Open hub folder ↗</a>${isAdmin() ? '<button class="btn" data-drive-update>Update bridge code</button><button class="btn" data-drive-edit>Change bridge</button>' : ''}</div>`;
       D.call('status').then(r => {
         box.querySelector('[data-drive-state]').textContent = `Connected · files go to “${r.root.name}”`;
         const open = box.querySelector('[data-drive-open]'); open.href = r.root.webViewLink; open.hidden = false;
@@ -162,8 +182,15 @@ window.HubDrive = (() => {
     card.querySelector('[data-connect]') && card.querySelector('[data-connect]').before(box);
   }
   document.addEventListener('click', async event => {
-    const t = event.target.closest('[data-drive-guide],[data-drive-save],[data-drive-edit],[data-drive-copy]');
+    const t = event.target.closest('[data-drive-guide],[data-drive-save],[data-drive-edit],[data-drive-copy],[data-drive-update]');
     if (!t) return;
+    if (t.dataset.driveUpdate !== undefined) {
+      return modal('Update the Drive bridge', `<ol class="drive-steps">
+        <li>Copy the latest code: <button class="btn small" data-drive-copy="/integrations/google-drive/Code.gs">Copy Code.gs</button></li>
+        <li>Open your bridge project on <a class="text-link" href="https://script.google.com/home?authuser=support@nexttokin.ca" target="_blank" rel="noopener">script.google.com ↗</a> (as support@nexttokin.ca). In <b>Code.gs</b> press <b>Cmd+A</b>, then paste, then <b>Cmd+S</b>.</li>
+        <li><b>Deploy → Manage deployments</b> → the pencil ✏️ → Version: <b>New version</b> → <b>Deploy</b>. The web address stays the same, so nothing changes here.</li>
+      </ol>`);
+    }
     if (t.dataset.driveGuide !== undefined) return guide();
     if (t.dataset.driveCopy) {
       try { await navigator.clipboard.writeText(await (await fetch(t.dataset.driveCopy, { cache: 'no-store' })).text()); t.textContent = 'Copied ✓'; }

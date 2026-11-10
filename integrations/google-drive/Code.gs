@@ -20,7 +20,8 @@ function doGet() {
 function doPost(e) {
   try {
     const req = JSON.parse(e.postData.contents);
-    if (!hubRole_(req.token)) return out_({ error: 'Sign in to the hub first.' });
+    const role = hubRole_(req.token);
+    if (!role) return out_({ error: 'Sign in to the hub first.' });
 
     if (req.action === 'status') {
       const root = DriveApp.getFolderById(ROOT_ID);
@@ -62,6 +63,16 @@ function doPost(e) {
       throw new Error('Google Drive stopped the upload (' + code + '): ' + res.getContentText().slice(0, 200));
     }
 
+    if (req.action === 'trash') {
+      // Producers and admins can move a hub file to the Drive trash (recoverable for 30 days).
+      if (role !== 'admin' && role !== 'producer') throw new Error('Only producers can remove files.');
+      let file;
+      try { file = DriveApp.getFileById(String(req.id)); } catch (err) { return out_({ ok: true, gone: true }); }
+      if (!insideHub_(file)) throw new Error('That file isn’t in the hub folder.');
+      if (!file.isTrashed()) file.setTrashed(true);
+      return out_({ ok: true });
+    }
+
     return out_({ error: 'Unknown action' });
   } catch (err) {
     return out_({ error: String((err && err.message) || err) });
@@ -77,6 +88,23 @@ function hubRole_(token) {
   });
   if (res.getResponseCode() !== 200) return null;
   return JSON.parse(res.getContentText());
+}
+// True when the file sits somewhere inside "The Program · Multimedia Hub".
+function insideHub_(file) {
+  const seen = {};
+  const queue = [];
+  const parents = file.getParents();
+  while (parents.hasNext()) queue.push(parents.next());
+  while (queue.length) {
+    const folder = queue.shift();
+    const id = folder.getId();
+    if (id === ROOT_ID) return true;
+    if (seen[id]) continue;
+    seen[id] = true;
+    const up = folder.getParents();
+    while (up.hasNext()) queue.push(up.next());
+  }
+  return false;
 }
 function child_(folder, name) {
   const found = folder.getFoldersByName(name);
