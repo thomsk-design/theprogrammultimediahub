@@ -3,16 +3,19 @@
 // keeps the real take. Audio is analysed in this browser only.
 window.TalentAudio = (() => {
   const prefsKey = 'program-talent-audio-v1';
-  const prefs = { deviceId: '', threshold: -42, floor: null };
+  const prefs = { deviceId: '', threshold: -50, floor: null, auto: true };
   try { Object.assign(prefs, JSON.parse(localStorage.getItem(prefsKey) || '{}')); } catch {}
-  prefs.threshold = Math.min(-15, Math.max(-75, Number(prefs.threshold) || -42));
+  prefs.threshold = Math.min(-15, Math.max(-85, Number(prefs.threshold) || -50));
+  prefs.auto = prefs.auto !== false;
   const savePrefs = () => { try { localStorage.setItem(prefsKey, JSON.stringify(prefs)); } catch {} };
 
   const HANG_MS = 450;        // keep "speaking" through short gaps between words
   const HOLD_MS = 1500;       // peak-hold marker
   const HOT_DB = -3;          // feed is running hot
+  const AUTO_MARGIN = 10;     // auto mode: speech is this many dB above the room
+  const RELEASE_DB = 4;       // hysteresis: stay "speaking" until this far below the trigger
   const listeners = new Set();
-  const level = { connected: false, label: '', rms: -100, peak: -100, peakHold: -100, hot: false, voice: false, raw: false };
+  const level = { connected: false, label: '', rms: -100, peak: -100, peakHold: -100, hot: false, voice: false, raw: false, floor: null, threshold: prefs.threshold };
   let ctx = null, stream = null, analyser = null, buf = null, frame = 0;
   let lastVoice = 0, peakAt = 0, hotUntil = 0, calibration = null;
 
@@ -36,8 +39,15 @@ window.TalentAudio = (() => {
     if (peakDb >= level.peakHold || now - peakAt > HOLD_MS) { level.peakHold = peakDb; peakAt = now; }
     if (peakDb >= HOT_DB) hotUntil = now + 2000;
     level.hot = now < hotUntil;
-    level.raw = rmsDb > prefs.threshold;
-    if (level.raw) lastVoice = now;
+    // Track the room's noise floor: drop quickly to quiet moments, creep up slowly.
+    if (rmsDb > -100) {
+      if (level.floor === null) level.floor = rmsDb;
+      else if (rmsDb < level.floor) level.floor += (rmsDb - level.floor) * 0.3;
+      else level.floor += Math.min(rmsDb - level.floor, 0.015);
+    }
+    level.threshold = prefs.auto && level.floor !== null ? Math.round(Math.min(-15, Math.max(-85, level.floor + AUTO_MARGIN))) : prefs.threshold;
+    level.raw = rmsDb > level.threshold;
+    if (level.raw || (level.voice && rmsDb > level.threshold - RELEASE_DB)) lastVoice = now;
     level.voice = now - lastVoice < HANG_MS;
     if (calibration) calibration.samples.push(rmsDb);
     emit('frame', level);
@@ -64,6 +74,7 @@ window.TalentAudio = (() => {
     track.onended = () => { disconnect(true); emit('lost'); };
     level.connected = true;
     level.label = track.label || 'Audio input';
+    level.floor = prefs.floor;
     prefs.deviceId = track.getSettings().deviceId || deviceId || '';
     savePrefs();
     lastVoice = 0;
@@ -78,7 +89,7 @@ window.TalentAudio = (() => {
     if (ctx) ctx.close().catch(() => {});
     stream = ctx = analyser = null;
     calibration = null;
-    Object.assign(level, { connected: false, rms: -100, peak: -100, peakHold: -100, hot: false, voice: false, raw: false });
+    Object.assign(level, { connected: false, rms: -100, peak: -100, peakHold: -100, hot: false, voice: false, raw: false, floor: null, threshold: prefs.threshold });
     if (!silent) emit('disconnected');
   }
 
@@ -92,7 +103,8 @@ window.TalentAudio = (() => {
         calibration = null;
         const floor = samples.length ? samples[Math.floor(samples.length * 0.9)] : -70; // 90th percentile of room noise
         prefs.floor = Math.round(floor);
-        prefs.threshold = Math.round(Math.min(-15, Math.max(-75, floor + 12)));
+        level.floor = floor;
+        prefs.threshold = Math.round(Math.min(-15, Math.max(-85, floor + AUTO_MARGIN)));
         savePrefs();
         emit('calibrated', { floor: prefs.floor, threshold: prefs.threshold });
         resolve({ floor: prefs.floor, threshold: prefs.threshold });
@@ -100,12 +112,13 @@ window.TalentAudio = (() => {
     });
   }
 
-  function setThreshold(db) { prefs.threshold = Math.min(-15, Math.max(-75, Number(db))); savePrefs(); }
+  function setThreshold(db) { prefs.threshold = Math.min(-15, Math.max(-85, Number(db))); prefs.auto = false; savePrefs(); }
+  function setAuto(on) { prefs.auto = !!on; if (!on && level.threshold) prefs.threshold = level.threshold; savePrefs(); }
 
   if (supported() && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', () => emit('devices'));
 
   return {
-    supported, devices, connect, disconnect, calibrate, setThreshold, level, prefs,
+    supported, devices, connect, disconnect, calibrate, setThreshold, setAuto, level, prefs,
     on(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   };
 })();

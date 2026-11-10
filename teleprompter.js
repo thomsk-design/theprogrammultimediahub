@@ -40,10 +40,10 @@
       <section class="prompter-reader" hidden>
         <div class="prompter-audio">
           <div class="pa-source"><span class="pa-label">MIC</span><select data-p-device aria-label="Audio input"><option value="">Default input</option></select><button class="btn" data-p-connect>Connect mic</button></div>
-          <div class="pa-meter-wrap"><div class="pa-meter" aria-hidden="true"><div class="pa-fill"></div><div class="pa-peak"></div><div class="pa-threshold"></div></div><div class="pa-scale" aria-hidden="true"><span style="left:0">-60</span><span style="left:33.3%">-40</span><span style="left:66.6%">-20</span><span style="left:90%">-6</span><span style="left:100%">0</span></div></div>
+          <div class="pa-meter-wrap"><div class="pa-meter" aria-hidden="true"><div class="pa-fill"></div><div class="pa-peak"></div><div class="pa-threshold"></div></div><div class="pa-scale" aria-hidden="true"><span style="left:0">-72</span><span style="left:33.3%">-48</span><span style="left:66.6%">-24</span><span style="left:91.7%">-6</span><span style="left:100%">0</span></div></div>
           <output class="pa-db" data-p-db>— dB</output>
           <span class="pa-light" data-p-voice data-state="off">Mic off</span>
-          <div class="pa-tools"><button class="btn" data-p-calibrate disabled title="Stay quiet for 3 seconds so the desk can hear the room">Room tone</button><label class="pa-sens" title="Level that counts as speaking">Trigger <input type="range" min="-75" max="-15" step="1" data-p-threshold aria-label="Speaking trigger level"><output data-p-threshold-label></output></label><label class="pa-follow"><input type="checkbox" data-p-follow> Follow my voice</label></div>
+          <div class="pa-tools"><button class="btn" data-p-calibrate disabled title="Stay quiet for 3 seconds so the desk can hear the room">Room tone</button><label class="pa-sens" title="Level that counts as speaking">Trigger <input type="range" min="-85" max="-15" step="1" data-p-threshold aria-label="Speaking trigger level"><output data-p-threshold-label></output></label><label class="pa-follow" title="Set the trigger automatically, just above the room's background noise"><input type="checkbox" data-p-auto> Auto</label><label class="pa-follow"><input type="checkbox" data-p-follow> Follow my voice</label></div>
         </div>
         <div class="prompter-controls"><button class="btn primary" data-p-play>Start</button><button class="btn" data-p-restart>Restart</button><button class="btn" data-p-mark>Mark</button><button class="btn" data-p-edit>Edit script</button><button class="btn" data-p-reader-highlight>Highlight selection</button><button class="btn" data-p-reader-clear>Clear emphasis</button><label>Speed <input type="range" min="10" max="120" step="5" data-p-speed aria-label="Scroll speed"><output data-p-speed-label></output></label><label>Text size <input type="range" min="24" max="80" step="2" data-p-size aria-label="Text size"><output data-p-size-label></output></label></div>
         <div class="prompter-timing"><span class="pt-take" data-p-take>No takes yet</span><span>Elapsed <output data-p-elapsed>00:00</output></span><span>Remaining ≈ <output data-p-remaining>00:00</output></span><span>Pace ≈ <output data-p-wpm>—</output></span><span data-p-countdown>Silence cues follow your speed.</span><button class="text-link" data-p-takes>Take log ↓</button></div>
@@ -297,12 +297,15 @@
     }
 
     // ---- Microphone ----
-    const meterPct = db => `${Math.max(0, Math.min(100, (db + 60) / 60 * 100))}%`;
+    const meterPct = db => `${Math.max(0, Math.min(100, (db + 72) / 72 * 100))}%`;
     function showThreshold() {
       if (!audio) return;
-      q('[data-p-threshold]').value = audio.prefs.threshold;
-      q('[data-p-threshold-label]').textContent = `${audio.prefs.threshold} dB`;
-      q('.pa-threshold').style.left = meterPct(audio.prefs.threshold);
+      const auto = audio.prefs.auto, value = auto && audio.level.connected ? audio.level.threshold : audio.prefs.threshold;
+      q('[data-p-auto]').checked = auto;
+      q('[data-p-threshold]').disabled = auto;
+      q('[data-p-threshold]').value = value;
+      q('[data-p-threshold-label]').textContent = auto && !audio.level.connected ? 'Auto' : `${value} dB`;
+      q('.pa-threshold').style.left = meterPct(value);
     }
     async function fillDevices() {
       if (!audio) return;
@@ -350,6 +353,7 @@
         const state = level.voice ? 'voice' : 'quiet';
         if (light.dataset.state !== state) { light.dataset.state = state; light.textContent = level.voice ? 'Speaking' : 'Quiet'; }
         q('.prompter-audio').classList.toggle('hot', level.hot);
+        if (audio.prefs.auto) showThreshold();
         if (!playing) updateCue();
       } else if (type === 'lost') {
         micUi();
@@ -375,6 +379,7 @@
       button.disabled = !audio.level.connected;
     };
     q('[data-p-threshold]').oninput = event => { if (audio) { audio.setThreshold(event.target.value); showThreshold(); } };
+    q('[data-p-auto]').onchange = event => { if (audio) { audio.setAuto(event.target.checked); showThreshold(); status(event.target.checked ? 'Trigger is automatic: anything clearly louder than the room counts as speaking.' : 'Trigger is manual: drag it so speaking sits to the right of the gold mark.'); } };
     q('[data-p-follow]').onchange = event => {
       follow = event.target.checked;
       persist();
