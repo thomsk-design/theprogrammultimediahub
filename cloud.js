@@ -196,10 +196,18 @@
       sb.rpc('program_ack_script', { script_id: s.id }).then(({ error }) => { if (!error) synced.set(key, JSON.stringify({ ...JSON.parse(was), ack: true })); });
     }
   }
+  function talentFiles() {
+    for (const f of list('files')) {
+      const key = keyOf('files', f.id);
+      if (synced.has(key)) continue;
+      synced.set(key, JSON.stringify(f));
+      sb.from('program_records').insert({ kind: 'files', id: f.id, data: f, updated_by: userId }).then(({ error }) => { if (error) { synced.delete(key); console.error(error); } });
+    }
+  }
   window.save = function () {
     originalSave();
     if (!member) return;
-    if (member.role === 'talent') return talentAcks();
+    if (member.role === 'talent') { talentAcks(); talentFiles(); return; }
     clearTimeout(timer);
     timer = setTimeout(push, 700);
     badge('Saving…');

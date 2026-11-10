@@ -665,7 +665,9 @@
     function takeFileName(take) {
       const { day, time } = stamp();
       const id = (script && script.piece && script.piece !== 'DEMO' ? script.piece : 'TP').replace(/[^A-Za-z0-9-]/g, '');
-      return `${id}_${day}_take${String(take.take).padStart(2, '0')}_${time}.wav`;
+      const member = window.HubCloud && HubCloud.member();
+      const who = member ? (member.display_name || member.email.split('@')[0]).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : '';
+      return `${id}_${day}_${who ? who + '_' : ''}take${String(take.take).padStart(2, '0')}_${time}.wav`;
     }
     function recUi() {
       q('[data-p-rec-on]').checked = recOn;

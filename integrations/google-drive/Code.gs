@@ -1,16 +1,17 @@
 /**
  * The Program · Multimedia Hub → Google Drive bridge
  *
- * Runs as the Next to Kin Google account that deploys it. Hub members (checked against
- * Supabase on every request) receive a short-lived upload token. The token can only touch
- * files and folders this script creates (drive.file scope) — nothing else in the Drive.
- * Files upload straight from the browser to Google Drive; nothing passes through here.
+ * Runs as the Next to Kin Google account that deploys it (support@nexttokin.ca) and files
+ * uploads into "The Program · Multimedia Hub" in that Drive. Every request is checked
+ * against the hub's sign-in (Supabase). Contributors never receive a Google token: the
+ * bridge opens a one-file upload session and either the browser sends the file straight
+ * to it, or the bridge relays the pieces. Each session can only write that single file.
  */
 const SUPABASE_URL = 'https://etukrfqlrhiepsedrvzr.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_QV-frUgCkQ02FEd_8_C8wg_Bnfuvid3';
-const ROOT_NAME = 'The Program · Multimedia Hub';
+const ROOT_ID = '10rzUz6wv_GTO0t3V44uuSnDSRpwE-8qB'; // The Program · Multimedia Hub
 const FOLDERS = ['01_Incoming', '02_Working', '03_Approved', '04_Delivery'];
-const DRIVE = 'https://www.googleapis.com/drive/v3';
+const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,size,webViewLink';
 
 function doGet() {
   return out_({ ok: true, service: 'The Program hub · Google Drive bridge' });
@@ -20,22 +21,48 @@ function doPost(e) {
   try {
     const req = JSON.parse(e.postData.contents);
     if (!hubRole_(req.token)) return out_({ error: 'Sign in to the hub first.' });
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
-    try {
-      const root = rootId_();
-      if (req.action === 'status') return out_({ ok: true, root: info_(root) });
-      if (req.action === 'start') {
-        const area = FOLDERS.indexOf(req.folder) >= 0 ? req.folder : '01_Incoming';
-        let parent = childFolder_(root, area);
-        const sub = req.subfolder ? String(req.subfolder).replace(/[\\/:*?"<>|]/g, '-').slice(0, 80) : '';
-        if (sub) parent = childFolder_(parent, sub);
-        return out_({ ok: true, token: ScriptApp.getOAuthToken(), folderId: parent, folderPath: [ROOT_NAME, area, sub].filter(String).join(' / ') });
-      }
-      return out_({ error: 'Unknown action' });
-    } finally {
-      lock.releaseLock();
+
+    if (req.action === 'status') {
+      const root = DriveApp.getFolderById(ROOT_ID);
+      return out_({ ok: true, root: { id: root.getId(), name: root.getName(), webViewLink: root.getUrl() } });
     }
+
+    if (req.action === 'start') {
+      const area = FOLDERS.indexOf(req.folder) >= 0 ? req.folder : '01_Incoming';
+      const sub = req.subfolder ? String(req.subfolder).replace(/[\\/:*?"<>|]/g, '-').slice(0, 80) : '';
+      const lock = LockService.getScriptLock();
+      lock.waitLock(20000);
+      let parent;
+      try {
+        parent = child_(DriveApp.getFolderById(ROOT_ID), area);
+        if (sub) parent = child_(parent, sub);
+      } finally { lock.releaseLock(); }
+      const name = String(req.name || 'upload').replace(/[\\/]/g, '-').slice(0, 200);
+      const size = Math.max(0, Number(req.size) || 0);
+      const headers = { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'X-Upload-Content-Type': req.type || 'application/octet-stream', 'X-Upload-Content-Length': String(size) };
+      if (/^https:\/\/[\w.-]+(:\d+)?$/.test(req.origin || '')) headers.Origin = req.origin; // lets the browser send pieces directly
+      const res = UrlFetchApp.fetch(UPLOAD, { method: 'post', contentType: 'application/json; charset=UTF-8', payload: JSON.stringify({ name: name, parents: [parent.getId()] }), headers: headers, muteHttpExceptions: true });
+      const session = header_(res, 'Location');
+      if (res.getResponseCode() >= 300 || !session) throw new Error('Google Drive refused the upload: ' + res.getContentText());
+      return out_({ ok: true, session: session, folderPath: ['The Program · Multimedia Hub', area, sub].filter(String).join(' / ') });
+    }
+
+    if (req.action === 'chunk') {
+      // Relay one piece (base64) to an upload session this bridge opened.
+      if (String(req.session || '').indexOf('https://www.googleapis.com/upload/drive/v3/files?') !== 0) throw new Error('Not a Drive upload session.');
+      const total = Number(req.total);
+      const bytes = req.data ? Utilities.base64Decode(req.data) : [];
+      const range = bytes.length ? 'bytes ' + req.start + '-' + (Number(req.start) + bytes.length - 1) + '/' + total : 'bytes */' + total;
+      const options = { method: 'put', headers: { 'Content-Range': range }, muteHttpExceptions: true };
+      if (bytes.length) { options.payload = bytes; options.contentType = 'application/octet-stream'; }
+      const res = UrlFetchApp.fetch(req.session, options);
+      const code = res.getResponseCode();
+      if (code === 308) return out_({ ok: true, status: 308, range: header_(res, 'Range') || '' });
+      if (code === 200 || code === 201) return out_({ ok: true, status: code, file: JSON.parse(res.getContentText()) });
+      throw new Error('Google Drive stopped the upload (' + code + '): ' + res.getContentText().slice(0, 200));
+    }
+
+    return out_({ error: 'Unknown action' });
   } catch (err) {
     return out_({ error: String((err && err.message) || err) });
   }
@@ -51,45 +78,21 @@ function hubRole_(token) {
   if (res.getResponseCode() !== 200) return null;
   return JSON.parse(res.getContentText());
 }
-
-function api_(method, path, body) {
-  const options = { method: method, headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true };
-  if (body) { options.contentType = 'application/json'; options.payload = JSON.stringify(body); }
-  const res = UrlFetchApp.fetch(DRIVE + path, options);
-  if (res.getResponseCode() >= 300) throw new Error('Google Drive: ' + res.getContentText());
-  return JSON.parse(res.getContentText());
+function child_(folder, name) {
+  const found = folder.getFoldersByName(name);
+  return found.hasNext() ? found.next() : folder.createFolder(name);
 }
-function exists_(id) {
-  try { return !api_('get', '/files/' + id + '?fields=id,trashed').trashed; } catch (e) { return false; }
-}
-function find_(name, parent) {
-  const q = "mimeType='application/vnd.google-apps.folder' and trashed=false and name='" + name.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "' and '" + parent + "' in parents";
-  const r = api_('get', '/files?fields=files(id)&q=' + encodeURIComponent(q));
-  return r.files.length ? r.files[0].id : null;
-}
-function make_(name, parent) {
-  return api_('post', '/files?fields=id', { name: name, mimeType: 'application/vnd.google-apps.folder', parents: [parent] }).id;
-}
-function childFolder_(parent, name) {
-  const props = PropertiesService.getScriptProperties(), key = 'folder:' + parent + ':' + name;
-  const cached = props.getProperty(key);
-  if (cached && exists_(cached)) return cached;
-  const id = find_(name, parent) || make_(name, parent);
-  props.setProperty(key, id);
-  return id;
-}
-function rootId_() {
-  const props = PropertiesService.getScriptProperties();
-  let id = props.getProperty('root');
-  if (id && exists_(id)) return id;
-  id = find_(ROOT_NAME, 'root') || make_(ROOT_NAME, 'root');
-  props.setProperty('root', id);
-  FOLDERS.forEach(function (f) { childFolder_(id, f); });
-  return id;
-}
-function info_(id) {
-  return api_('get', '/files/' + id + '?fields=id,name,webViewLink');
+function header_(res, name) {
+  const headers = res.getAllHeaders();
+  for (const key in headers) if (key.toLowerCase() === name.toLowerCase()) return [].concat(headers[key])[0];
+  return null;
 }
 function out_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// Run once from the editor (select "authorize" → Run) to approve access before deploying.
+function authorize() {
+  Logger.log(DriveApp.getFolderById(ROOT_ID).getName());
+  UrlFetchApp.fetch(SUPABASE_URL + '/auth/v1/health', { muteHttpExceptions: true });
 }

@@ -25,43 +25,59 @@ window.HubDrive = (() => {
     active++;
     try { return await uploadOnce(blob, opts); } finally { active--; }
   }
+  // The bridge opens a one-file upload session. Pieces go straight to Google when the
+  // browser is allowed to; otherwise the bridge relays them. No Google token reaches the browser.
+  const toBase64 = blob => new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1] || ''); r.onerror = () => reject(r.error); r.readAsDataURL(blob); });
+  const RELAY = 4 * 1024 * 1024; // relayed pieces stay well under Apps Script limits
   async function uploadOnce(blob, { name, folder = '01_Incoming', subfolder = today(), type, onProgress } = {}) {
-    const start = await call('start', { folder, subfolder });
-    const init = await fetch(UPLOAD, {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + start.token, 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': type || blob.type || 'application/octet-stream', 'X-Upload-Content-Length': String(blob.size) },
-      body: JSON.stringify({ name, parents: [start.folderId] }),
-    });
-    const session = init.headers.get('Location');
-    if (!init.ok || !session) throw new Error(`Google Drive refused the upload (${init.status}).`);
-    let offset = 0, failures = 0;
+    const total = blob.size;
+    const start = await call('start', { name, size: total, type: type || blob.type || 'application/octet-stream', folder, subfolder, origin: location.origin });
+    const session = start.session;
+    let offset = 0, direct = true, failures = 0;
+    const done = file => {
+      if (onProgress) onProgress(1);
+      return { id: file.id, name: file.name || name, size: Number(file.size) || total, link: file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`, folder: start.folderPath };
+    };
+    const after = range => (range ? Number(String(range).split('-')[1]) + 1 : null);
     for (;;) {
-      const end = Math.min(offset + CHUNK, blob.size);
-      let res;
-      try {
-        res = await fetch(session, { method: 'PUT', headers: blob.size ? { 'Content-Range': `bytes ${offset}-${end - 1}/${blob.size}` } : { 'Content-Range': 'bytes */0' }, body: blob.slice(offset, end) });
-      } catch {
-        if (++failures > 4) throw new Error('The connection dropped during the upload.');
-        await new Promise(r => setTimeout(r, 1500 * failures));
-        // Ask Google how much arrived, then carry on from there.
-        const check = await fetch(session, { method: 'PUT', headers: { 'Content-Range': `bytes */${blob.size}` } }).catch(() => null);
-        const range = check && check.headers.get('Range');
-        if (check && check.ok) res = check; else { offset = range ? Number(range.split('-')[1]) + 1 : offset; continue; }
+      if (direct) {
+        const end = Math.min(offset + CHUNK, total);
+        let res = null;
+        try {
+          res = await fetch(session, { method: 'PUT', headers: { 'Content-Range': total ? `bytes ${offset}-${end - 1}/${total}` : 'bytes */0' }, body: blob.slice(offset, end) });
+        } catch {
+          direct = false; // browser not allowed to talk to Google directly: relay through the bridge
+          const check = await call('chunk', { session, total });
+          if (check.file) return done(check.file);
+          offset = after(check.range) ?? 0;
+          continue;
+        }
+        if (res.status === 308) { offset = after(res.headers.get('Range')) ?? end; failures = 0; if (onProgress) onProgress(offset / total); continue; }
+        if (res.ok) {
+          const file = await res.json().catch(() => null);
+          if (file && file.id) return done(file);
+          const check = await call('chunk', { session, total }); // unreadable reply: ask the bridge how it ended
+          if (check.file) return done(check.file);
+          direct = false; offset = after(check.range) ?? 0; continue;
+        }
+        if (res.status >= 500 && ++failures <= 4) { await new Promise(r => setTimeout(r, 1500 * failures)); continue; }
+        throw new Error(`The upload stopped (${res.status}).`);
       }
-      if (res.status === 308) {
-        const range = res.headers.get('Range');
-        offset = range ? Number(range.split('-')[1]) + 1 : end;
-        failures = 0;
-        if (onProgress) onProgress(offset / blob.size);
+      const end = Math.min(offset + RELAY, total);
+      let r;
+      try { r = await call('chunk', { session, start: offset, total, data: await toBase64(blob.slice(offset, end)) }); }
+      catch (error) {
+        if (++failures > 4) throw error;
+        await new Promise(res => setTimeout(res, 2000 * failures));
+        const check = await call('chunk', { session, total }).catch(() => null);
+        if (check && check.file) return done(check.file);
+        if (check) offset = after(check.range) ?? offset;
         continue;
       }
-      if (res.ok) {
-        const f = await res.json();
-        if (onProgress) onProgress(1);
-        return { id: f.id, name: f.name, size: Number(f.size) || blob.size, link: f.webViewLink || `https://drive.google.com/file/d/${f.id}/view`, folder: start.folderPath };
-      }
-      if (res.status >= 500 && ++failures <= 4) { await new Promise(r => setTimeout(r, 1500 * failures)); continue; }
-      throw new Error(`The upload stopped (${res.status}).`);
+      failures = 0;
+      if (r.file) return done(r.file);
+      offset = after(r.range) ?? end;
+      if (onProgress) onProgress(offset / total);
     }
   }
 
@@ -120,10 +136,11 @@ window.HubDrive = (() => {
       <li>Open <a class="text-link" href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com ↗</a> <b>signed in as your Next to Kin Google account</b>. A new project opens.</li>
       <li>Name it “The Program hub · Drive bridge”. Replace everything in <b>Code.gs</b> with the bridge code: <button class="btn small" data-drive-copy="/integrations/google-drive/Code.gs">Copy Code.gs</button></li>
       <li>Project Settings (gear) → tick <b>Show “appsscript.json” manifest file in editor</b>. Back in the editor, replace <b>appsscript.json</b> with: <button class="btn small" data-drive-copy="/integrations/google-drive/appsscript.json">Copy appsscript.json</button></li>
-      <li>Save, then <b>Deploy → New deployment</b> → type <b>Web app</b>. Execute as <b>Me</b>; Who has access <b>Anyone</b>. Deploy.</li>
-      <li>Approve access when asked. Google will say the app isn’t verified because it’s your own script: choose <b>Advanced → Go to … (unsafe)</b>, then <b>Allow</b>. It can only see files it creates.</li>
+      <li>Save. In the toolbar, choose the function <b>authorize</b> and press <b>Run</b> once, then approve access (next step).</li>
+      <li><b>Deploy → New deployment</b> → type <b>Web app</b>. Execute as <b>Me</b>; Who has access <b>Anyone</b>. Deploy.</li>
+      <li>Approve access when asked. Google will say the app isn’t verified because it’s your own script: choose <b>Advanced → Go to … (unsafe)</b>, then <b>Allow</b>. The script runs as you inside Google; hub users never receive access to your Drive.</li>
       <li>Copy the <b>Web app URL</b> (ends in <code>/exec</code>) and paste it on the Google Drive card here, then press <b>Connect</b>.</li>
-    </ol><p class="small muted mt">A “The Program · Multimedia Hub” folder with 01_Incoming, 02_Working, 03_Approved and 04_Delivery is created in that Drive on first use.</p>`);
+    </ol><p class="small muted mt">Uploads land in “The Program · Multimedia Hub / 01_Incoming / &lt;date&gt;” in the Next to Kin Drive. Contributors never get access to the Drive itself.</p>`);
   }
   async function decorateDrive() {
     const card = [...document.querySelectorAll('.integration-card')].find(c => c.querySelector('h2') && c.querySelector('h2').textContent === 'Google Drive');
@@ -173,12 +190,49 @@ window.HubDrive = (() => {
     }
   });
 
+  // ---- Talent portal: upload recordings made elsewhere ----
+  function talentUpload() {
+    const input = document.createElement('input');
+    input.type = 'file'; input.multiple = true; input.accept = 'audio/*,video/*,.wav,.mp3,.m4a,.aif,.aiff,.flac,.mov,.mp4';
+    input.onchange = () => {
+      const files = [...input.files];
+      if (!files.length) return;
+      modal('Uploading to The Program', `<p class="small muted">Keep this page open until every file shows ✓.</p><ul class="upload-list">${files.map((f, i) => `<li data-up="${i}"><span>${esc(f.name)}</span><b>Waiting…</b></li>`).join('')}</ul>`);
+      const member = HubCloud.member() || {};
+      const who = (member.display_name || (member.email || '').split('@')[0] || 'contributor').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      (async () => {
+        for (const [i, f] of files.entries()) {
+          const row = () => document.querySelector(`[data-up="${i}"] b`);
+          try {
+            const file = await D.upload(f, { name: `${who}_${f.name}`, folder: '01_Incoming', onProgress: p => { if (row()) row().textContent = `${Math.round(p * 100)}%`; } });
+            D.addFile(file, { source: 'Talent upload' });
+            if (row()) { row().textContent = '✓ Uploaded'; row().className = 'ok'; }
+          } catch (error) { if (row()) { row().textContent = '✕ ' + error.message; row().className = 'bad'; } }
+        }
+      })();
+    };
+    input.click();
+  }
+  document.addEventListener('click', event => {
+    if (event.target.closest('[data-action="talent-upload"]')) { event.preventDefault(); talentUpload(); }
+  });
+  function decorateTalent() {
+    const button = document.querySelector('#main [data-connect="Google Drive"]');
+    if (!button || !D.connected()) return;
+    button.removeAttribute('data-connect');
+    button.dataset.action = 'talent-upload';
+    button.textContent = 'Upload recordings →';
+    const note = button.parentElement.querySelector('p');
+    if (note) note.textContent = 'Recorded somewhere else? Upload your files here and they go straight to the production team’s Drive.';
+  }
+
   function syncFlags() { for (const i of integrations) if (i.name === 'Google Drive') i.connected = D.connected(); }
   const originalRender = window.render;
   window.render = function () {
     syncFlags();
     originalRender();
     if (location.hash === '#connections') decorateDrive();
+    if (location.hash === '#talent') decorateTalent();
   };
-  document.addEventListener('hub:settings', () => { syncFlags(); if (!document.body.classList.contains('cloud-wait') && demoRole && ['#connections', '#media', '#overview'].includes(location.hash)) render(); });
+  document.addEventListener('hub:settings', () => { syncFlags(); if (!document.body.classList.contains('cloud-wait') && demoRole && ['#connections', '#media', '#overview', '#talent'].includes(location.hash)) render(); });
 })();
