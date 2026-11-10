@@ -20,7 +20,7 @@
     dialog.className = 'prompter';
     dialog.setAttribute('aria-labelledby', 'prompter-title');
     dialog.innerHTML = `<header class="prompter-header"><div><div class="eyebrow">YOUR WORDS. YOUR PACE.</div><h2 id="prompter-title">Teleprompter</h2></div><button class="btn" data-p-close>Close ×</button></header>
-      <section class="prompter-editor"><label for="prompter-input">Add your script</label><p class="small muted">Paste your words below. Keep line breaks and pause cues wherever you need a breath.</p><textarea id="prompter-input" placeholder="Paste or type your script here…"></textarea><div class="prompter-emphasis-tools"><button class="btn" data-p-highlight>Highlight selected words</button><button class="btn" data-p-clear>Clear emphasis</button><span class="small muted">Select words above, then highlight them for emphasis.</span></div><div class="prompter-emphasis-tools"><label>Silence (seconds at normal speed) <input data-p-gap type="number" min="0.5" max="300" step="0.5" value="3" style="width:85px" aria-label="Silence duration"></label><button class="btn" data-p-insert-gap>Insert silence at cursor</button><span class="small muted">Use [silence: 3] anywhere. At half speed, 3 seconds becomes 6.</span></div><p class="small muted" data-p-saved>Saved in this browser only.</p><button class="btn primary" data-p-read>Open reader →</button></section>
+      <section class="prompter-editor"><label for="prompter-input">Add your script</label><p class="small muted">Paste your words below. Keep line breaks and pause cues wherever you need a breath.</p><textarea id="prompter-input" placeholder="Paste or type your script here…"></textarea><div class="prompter-emphasis-tools"><button class="btn" data-p-highlight>Highlight selected words</button><button class="btn" data-p-clear>Clear emphasis</button><span class="small muted">Select words above, then highlight them for emphasis.</span></div><div class="prompter-emphasis-tools"><label>Silence (seconds at normal speed) <input data-p-gap type="number" min="0.5" max="300" step="0.5" value="3" style="width:85px" aria-label="Silence duration"></label><button class="btn" data-p-insert-gap>Insert silence at cursor</button><span class="small muted">Paste cues like [SILENCE: ~3 SECONDS]. At half speed, 3 seconds becomes 6.</span></div><p class="small muted" data-p-saved>Saved in this browser only.</p><button class="btn primary" data-p-read>Open reader →</button></section>
       <section class="prompter-reader" hidden><div class="prompter-controls"><button class="btn primary" data-p-play>Start</button><button class="btn" data-p-restart>Restart</button><button class="btn" data-p-edit>Edit script</button><button class="btn" data-p-reader-highlight>Highlight selection</button><button class="btn" data-p-reader-clear>Clear emphasis</button><label>Speed <input type="range" min="10" max="120" step="5" data-p-speed aria-label="Scroll speed"><output data-p-speed-label></output></label><label>Text size <input type="range" min="24" max="80" step="2" data-p-size aria-label="Text size"><output data-p-size-label></output></label></div><div class="prompter-timing"><span>Elapsed <output data-p-elapsed>00:00</output></span><span>Remaining ≈ <output data-p-remaining>00:00</output></span><span data-p-countdown>Silence cues follow your speed.</span></div><p class="prompter-help">Space: pause / resume · ← / →: pace · ↑ / ↓: move back / forward · Home: restart · Esc: close</p><div class="prompter-viewport" tabindex="0" aria-label="Script reader. Use Space to pause or resume."><div class="prompter-text"></div></div><div class="prompter-status" role="status" aria-live="polite">Ready when you are.</div></section>`;
     document.body.append(dialog);
     const q = selector => dialog.querySelector(selector);
@@ -53,7 +53,7 @@
     function renderText() {
       const target = q('.prompter-text');
       target.replaceChildren();
-      const matches = [...input.value.matchAll(/\[(?:silence|pause):\s*(\d+(?:\.\d+)?)\s*\]/gi)].filter(m => Number(m[1]) > 0 && Number(m[1]) <= 300);
+      const matches = [...input.value.matchAll(/\[\s*(?:silence|pause)\s*:\s*(?:\\?~\s*)?(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)?\s*\]/gi)].filter(m => Number(m[1]) > 0 && Number(m[1]) <= 300);
       const boundaries = new Set([0, input.value.length]);
       for (const [start, end] of ranges) { boundaries.add(start); boundaries.add(end); }
       for (const match of matches) { boundaries.add(match.index); boundaries.add(match.index + match[0].length); }
@@ -185,7 +185,7 @@
       const seconds = Number(q('[data-p-gap]').value);
       if (!Number.isFinite(seconds) || seconds < 0.5 || seconds > 300) { q('[data-p-gap]').reportValidity(); return; }
       const start = input.selectionStart;
-      const cue = `\n[silence: ${seconds}]\n`;
+      const cue = `\n[SILENCE: ~${seconds} SECONDS]\n`;
       input.setRangeText(cue, start, start, 'end');
       input.oninput();
       input.focus();
