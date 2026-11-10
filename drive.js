@@ -174,5 +174,5 @@ window.HubDrive = (() => {
     originalRender();
     if (location.hash === '#connections') decorateDrive();
   };
-  document.addEventListener('hub:settings', () => { syncFlags(); if (['#connections', '#media', '#overview'].includes(location.hash)) render(); });
+  document.addEventListener('hub:settings', () => { syncFlags(); if (!document.body.classList.contains('cloud-wait') && demoRole && ['#connections', '#media', '#overview'].includes(location.hash)) render(); });
 })();

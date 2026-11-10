@@ -9,6 +9,7 @@
   const SEP = '\u0000';
   const keyOf = (kind, id) => kind + SEP + id;
   const originalSave = window.save, originalLanding = window.showLanding;
+  let door = null; // which login card was used: 'talent' or 'production'
   let sb = null, loading = null, member = null, userId = null, synced = new Map(), timer = 0, syncing = false, lastBadge = '';
 
   function client() {
@@ -39,6 +40,7 @@
     originalLanding(mode);
     const form = document.getElementById('demo-login');
     if (!form) return;
+    const chosenDoor = mode === 'login-talent' ? 'talent' : 'production';
     const card = form.closest('.login-card');
     if (card) { const intro = card.querySelector(':scope > p'); if (intro) intro.textContent += ' Sign in with the email you were invited with.'; }
     form.innerHTML = `<label for="hub-email">Email</label><input id="hub-email" type="email" autocomplete="email" required placeholder="you@example.com">
@@ -65,6 +67,7 @@
     };
     form.onsubmit = async event => {
       event.preventDefault();
+      door = chosenDoor; // only an actual sign-in decides the view
       say(''); submit.disabled = true;
       try {
         const auth = (await client()).auth, creds = { email: email.value.trim().toLowerCase(), password: password.value };
@@ -102,7 +105,12 @@
     member = m;
     for (const i of integrations) if (['Shared database', 'Team accounts'].includes(i.name)) i.connected = true;
     await pull(true);
-    demoRole = m.role === 'talent' ? 'talent' : 'production';
+    // Producers and admins can use either view; talent only ever get the talent view.
+    let view = null;
+    try { view = sessionStorage.getItem('program-demo-role'); } catch {}
+    if (door) view = door;
+    demoRole = m.role === 'talent' ? 'talent' : (view === 'talent' ? 'talent' : 'production');
+    door = null;
     try { sessionStorage.setItem('program-demo-role', demoRole); } catch {}
     document.body.classList.remove('cloud-wait');
     const here = location.hash.slice(1);
@@ -122,9 +130,9 @@
   }, true);
 
   // ---- Sync ----
-  function order(kind, list) {
+  function order(kind, rows) {
     const index = new Map(list(kind).map((d, i) => [d.id, i]));
-    return list.sort((a, b) => (index.has(a.id) ? index.get(a.id) : 1e9) - (index.has(b.id) ? index.get(b.id) : 1e9) || String(a.id).localeCompare(String(b.id)));
+    return rows.sort((a, b) => (index.has(a.id) ? index.get(a.id) : 1e9) - (index.has(b.id) ? index.get(b.id) : 1e9) || String(a.id).localeCompare(String(b.id)));
   }
   function dirty() {
     for (const kind of KINDS) for (const d of list(kind)) if (synced.get(keyOf(kind, d.id)) !== JSON.stringify(d)) return true;
@@ -237,6 +245,23 @@
     if (avatar) avatar.textContent = (member.display_name || member.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
     const dot = document.querySelector('.preview-dot');
     if (dot) dot.textContent = 'Live';
+    // View switch for producers and admins.
+    let sw = document.querySelector('.view-switch');
+    if (member.role === 'talent') { if (sw) sw.remove(); return; }
+    if (!sw) {
+      sw = document.createElement('button');
+      sw.className = 'view-switch';
+      sw.onclick = () => switchView(demoRole === 'talent' ? 'production' : 'talent');
+      document.querySelector('.sidebar-foot').before(sw);
+    }
+    sw.innerHTML = demoRole === 'talent' ? '<span>⇄</span> Back to production' : '<span>⇄</span> Open talent view';
+  }
+  function switchView(view) {
+    if (!member || member.role === 'talent') return;
+    demoRole = view;
+    try { sessionStorage.setItem('program-demo-role', view); } catch {}
+    const target = view === 'talent' ? 'talent' : 'overview';
+    if (location.hash.slice(1) === target) render(); else location.hash = target;
   }
   const originalRender = window.render;
   window.render = function () { originalRender(); decorate(); };
@@ -244,8 +269,8 @@
   // ---- Boot ----
   let remembered = null;
   try { remembered = sessionStorage.getItem('program-demo-role'); } catch {}
-  if (remembered) document.body.classList.add('cloud-wait'); // hide the workspace until the account is confirmed
-  demoRole = null;
+  if (remembered) document.body.classList.add('cloud-wait'); // keep the workspace hidden until the account is confirmed
+  else demoRole = null;
   client().then(start).catch(error => {
     console.error(error);
     signedOutView();
