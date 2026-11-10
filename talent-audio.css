@@ -98,3 +98,15 @@ dialog.prompter.focus .prompter-unfocus{display:block}
 .dr-folder{font-size:12px;color:#f2efe8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
 @media(max-width:1100px){.prompter-drawer{grid-template-columns:repeat(2,minmax(0,1fr))}.prompter-drawer section:nth-child(3){border-left:0}.prompter-drawer section:nth-child(n+3){border-top:1px solid #2b2722}}
 @media(max-width:760px){.prompter-drawer{grid-template-columns:1fr}.prompter-drawer section{border-left:0}}
+
+/* Take complete */
+.pb-up{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;background:rgba(244,193,68,.12);color:var(--gold);font-size:11px;font-weight:700;letter-spacing:.04em;white-space:nowrap;font-variant-numeric:tabular-nums}.pb-up[hidden]{display:none}.pb-up[data-tone=ok]{background:rgba(111,207,122,.14);color:#9fd6a1}.pb-up[data-tone=bad]{background:rgba(224,112,79,.14);color:#f08a6c}
+.prompter-done{position:absolute;inset:0;z-index:6;display:grid;place-items:center;padding:24px;background:rgba(17,15,12,.78);backdrop-filter:blur(3px)}.prompter-done[hidden]{display:none}
+.pd-card{width:min(560px,100%);padding:28px 30px;border:1px solid #3a352e;border-radius:14px;background:#1d1a16;box-shadow:0 20px 60px rgba(0,0,0,.45)}
+.pd-card .eyebrow{font-size:9px;letter-spacing:.16em}.pd-card h3{margin:6px 0 4px;font:500 30px/1.1 var(--serif);color:#f2efe8}.pd-meta{margin:0 0 18px;font-size:12px;color:#8f8a81}
+.pd-steps{list-style:none;margin:0;padding:0;border-top:1px solid #2b2722}.pd-steps li{display:grid;grid-template-columns:28px 1fr;gap:10px;padding:14px 0;border-bottom:1px solid #2b2722;font-size:13px;color:#f2efe8}
+.pd-steps b{font-weight:600}.pd-steps small{display:block;margin-top:3px;font-size:11px;color:#8f8a81;overflow-wrap:anywhere}.pd-steps .text-link{display:inline-block;margin-top:6px;font-size:12px;color:var(--gold)}
+.pd-icon{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;font-size:12px;font-weight:700;background:#2b2722;color:#b5b1a9}.pd-icon[data-icon=ok]{background:rgba(111,207,122,.18);color:#9fd6a1}.pd-icon[data-icon=bad]{background:rgba(224,112,79,.18);color:#f08a6c}.pd-icon[data-icon=wait]{color:var(--gold);animation:pd-pulse 1.2s infinite}
+@keyframes pd-pulse{50%{opacity:.4}}
+.pd-bar{display:block;height:5px;margin-top:8px;border-radius:3px;background:#2b2722;overflow:hidden}.pd-bar span{display:block;height:100%;background:var(--gold);transition:width .3s}
+.pd-actions{display:flex;gap:10px;margin-top:20px}

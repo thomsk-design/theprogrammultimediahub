@@ -19,7 +19,13 @@ window.HubDrive = (() => {
     return data;
   }
 
-  async function upload(blob, { name, folder = '01_Incoming', subfolder = today(), type, onProgress } = {}) {
+  let active = 0;
+  window.addEventListener('beforeunload', event => { if (active) { event.preventDefault(); event.returnValue = ''; } });
+  async function upload(blob, opts = {}) {
+    active++;
+    try { return await uploadOnce(blob, opts); } finally { active--; }
+  }
+  async function uploadOnce(blob, { name, folder = '01_Incoming', subfolder = today(), type, onProgress } = {}) {
     const start = await call('start', { folder, subfolder });
     const init = await fetch(UPLOAD, {
       method: 'POST',

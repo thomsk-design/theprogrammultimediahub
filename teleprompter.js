@@ -53,7 +53,7 @@
       <section class="prompter-editor"><label for="prompter-input">Add your script</label><p class="small muted">Paste your words below. Keep line breaks and pause cues wherever you need a breath.</p><textarea id="prompter-input" placeholder="Paste or type your script here…"></textarea><div class="prompter-emphasis-tools"><button class="btn" data-p-highlight>Highlight selected words</button><button class="btn" data-p-clear>Clear emphasis</button><span class="small muted">Select words above, then highlight them for emphasis.</span></div><div class="prompter-emphasis-tools"><label>Silence (seconds at normal speed) <input data-p-gap type="number" min="0.5" max="300" step="0.5" value="3" style="width:85px" aria-label="Silence duration"></label><button class="btn" data-p-insert-gap>Insert silence at cursor</button><span class="small muted">Understands [SILENCE: ~3 SECONDS], [Pause: 5s], plain [Pause] (2s) and [Breath] (1s). At half speed, 3 seconds becomes 6.</span></div><p class="small muted" data-p-saved>Saved in this browser only.</p><button class="btn primary" data-p-read>Open reader →</button></section>
       <section class="prompter-reader" hidden>
         <div class="prompter-bar">
-          <div class="pb-transport"><button class="btn primary" data-p-play>Start</button><button class="btn" data-p-restart>Restart</button><button class="btn" data-p-mark title="Drop a marker (M)">Mark</button></div>
+          <div class="pb-transport"><button class="btn primary" data-p-play>Start</button><button class="btn" data-p-restart>Restart</button><button class="btn" data-p-mark title="Drop a marker (M)">Mark</button><button class="btn" data-p-finish hidden title="End this take and see where its files went">Finish take</button></div>
           <div class="pb-stats">
             <div class="pb-stat"><small>Take</small><output data-p-take>—</output></div>
             <div class="pb-stat"><small>Elapsed</small><output data-p-elapsed>00:00</output></div>
@@ -65,6 +65,7 @@
             <button class="btn" data-p-connect>Connect mic</button>
             <div class="pa-meter-wrap"><div class="pa-meter" aria-hidden="true"><div class="pa-fill"></div><div class="pa-peak"></div><div class="pa-threshold"></div></div></div>
             <span class="pb-rec" data-p-rec hidden></span>
+            <span class="pb-up" data-p-up hidden></span>
             <output class="pa-db" data-p-db>— dB</output>
             <span class="pa-light" data-p-voice data-state="off">Mic off</span>
           </div>
@@ -102,6 +103,7 @@
           <div class="prompter-shade" aria-hidden="true"></div>
           <div class="prompter-cue" data-p-cue hidden><div class="pc-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="pc-track" cx="60" cy="60" r="52"/><circle class="pc-arc" cx="60" cy="60" r="52" pathLength="100"/></svg><strong data-p-cue-num></strong></div><div class="pc-label" data-p-cue-label></div></div>
           <button class="prompter-unfocus" data-p-unfocus title="Show controls (H)">Show controls</button>
+          <div class="prompter-done" data-p-done hidden><div class="pd-card" role="dialog" aria-labelledby="pd-title"><div class="eyebrow">TAKE COMPLETE</div><h3 id="pd-title" data-pd-title></h3><p class="pd-meta" data-pd-meta></p><ul class="pd-steps"><li data-pd-local></li><li data-pd-drive></li><li data-pd-log></li></ul><div class="pd-actions"><button class="btn primary" data-pd-again>Record another take</button><button class="btn" data-pd-close>Done</button></div></div></div>
         </div>
         <div class="prompter-status" role="status" aria-live="polite">Ready when you are.</div>
       </section>`;
@@ -318,6 +320,7 @@
       const max = viewport.scrollHeight - viewport.clientHeight;
       q('.prompter-progress span').style.transform = `scaleX(${max > 0 ? Math.min(1, viewport.scrollTop / max) : 0})`;
       if (recorder) q('[data-p-rec]').textContent = `REC ${formatTime(recorder.seconds)}`;
+      q('[data-p-finish]').hidden = !currentTake;
       q('[data-p-take]').textContent = currentTake ? `${currentTake.take} · ${currentTake.started.slice(0, 5)}` : `${takes.length + 1} · ready`;
       updateCue();
     }
@@ -474,16 +477,14 @@
       }
       last = time;
       if (wordsOn ? cursor >= words.length && !activeCue && cues.every(c => completedCues.has(c.index)) : !activeCue && cues.every(c => completedCues.has(c.index)) && viewport.scrollTop >= viewport.scrollHeight - viewport.clientHeight - 1) {
-        pause('End of script. Restart for another take.');
-        endRecording();
-        currentTake = null;
-        timing();
+        finishTake('End of script.');
         return;
       }
       frame = requestAnimationFrame(tick);
     }
     function toggle() {
       if (playing) return pause();
+      if (doneTake) hideDone();
       if (viewport.scrollTop >= viewport.scrollHeight - viewport.clientHeight - 1 && !activeCue) restart();
       if (fresh || !currentTake) {
         fresh = false;
@@ -720,6 +721,7 @@
         recorder.take = take;
         recorder.target = target;
         recorder.name = name;
+        takeState(take).local = 'recording';
         take.file = folder ? `${folder.name}/${name}` : `Downloads/${name}`;
         saveTakes();
         recUi();
@@ -734,13 +736,19 @@
       recorder = null;
       recUi();
       if (!r) return;
+      const st = takeState(r.take);
+      st.local = 'saving'; st.r = r; refreshDone();
       try {
         const result = await r.stop();
+        Object.assign(st, { local: 'saved', file: r.take.file, seconds: result.seconds });
         status(`Saved take ${r.take.take} backup · ${formatTime(result.seconds)} · ${r.take.file}`);
         if (driveUp && window.HubDrive && HubDrive.connected() && r.target.blob) uploadTake(r);
+        else st.drive = window.HubDrive && HubDrive.connected() ? 'off' : 'unconnected';
       } catch (error) {
+        Object.assign(st, { local: 'failed', error: error.message, drive: 'skipped' });
         status(`The backup for take ${r.take.take} couldn’t be saved (${error.message}). The H2 still has its recording.`);
       }
+      refreshDone();
       closeTake();
       writeLogToFolder();
     }
@@ -755,19 +763,72 @@
     q('[data-p-folder]').onclick = () => pickFolder();
     q('[data-p-drive]').onchange = event => { driveUp = event.target.checked; persist(); };
     async function uploadTake(r) {
-      const take = r.take;
+      const take = r.take, st = takeState(take);
+      Object.assign(st, { drive: 'uploading', progress: 0, error: '' });
+      upChip(`↑ Drive 0%`); refreshDone();
       try {
         const blob = await r.target.blob();
-        const file = await HubDrive.upload(blob, { name: r.name, type: 'audio/wav', folder: '01_Incoming', onProgress: p => { if (p < 1) status(`Uploading take ${take.take} to Google Drive… ${Math.round(p * 100)}%`); } });
+        const file = await HubDrive.upload(blob, { name: r.name, type: 'audio/wav', folder: '01_Incoming', onProgress: p => { st.progress = p; upChip(`↑ Drive ${Math.round(p * 100)}%`); refreshDone(); if (p < 1) status(`Uploading take ${take.take} to Google Drive… ${Math.round(p * 100)}%`); } });
+        Object.assign(st, { drive: 'done', link: file.link, folder: file.folder });
+        upChip('✓ In Drive', 'ok'); refreshDone();
         take.drive = file.link;
         saveTakes();
         HubDrive.addFile(file, { source: 'Teleprompter', take: take.take, script: script ? script.title : 'Teleprompter draft' });
         status(`Take ${take.take} is in Google Drive · ${file.folder}`);
         writeLogToFolder();
       } catch (error) {
+        Object.assign(st, { drive: 'failed', error: error.message });
+        upChip('✕ Drive upload failed', 'bad'); refreshDone();
         status(`Take ${take.take} is saved on this computer but didn’t reach Google Drive (${error.message}).`);
       }
     }
+    // ---- End-of-take summary ----
+    const states = new WeakMap();
+    function takeState(take) { if (!states.has(take)) states.set(take, { local: 'off', drive: 'pending' }); return states.get(take); }
+    let doneTake = null, chipTimer = 0;
+    function upChip(text, tone = '') {
+      const chip = q('[data-p-up]');
+      clearTimeout(chipTimer);
+      chip.hidden = false; chip.textContent = text; chip.dataset.tone = tone;
+      if (tone === 'ok') chipTimer = setTimeout(() => { chip.hidden = true; }, 8000);
+    }
+    function finishTake(reason = 'Take finished.') {
+      if (!currentTake) return;
+      const take = currentTake;
+      pause(reason);
+      closeTake();
+      if (!recorder) { const st = takeState(take); st.local = recOn ? 'failed' : 'off'; st.drive = 'skipped'; if (recOn && !st.error) st.error = 'recording didn’t start'; }
+      showDone(take);
+      endRecording();
+      restart(); // back to the top, ready for a fresh take behind the summary
+      status(`${reason} Take ${take.take} is done.`);
+    }
+    function showDone(take) { doneTake = take; q('[data-p-done]').hidden = false; refreshDone(); q('[data-pd-close]').focus(); }
+    function hideDone() { doneTake = null; q('[data-p-done]').hidden = true; viewport.focus(); }
+    function refreshDone() {
+      const take = doneTake;
+      if (!take) return;
+      const st = takeState(take), e = escapeHtml;
+      q('[data-pd-title]').textContent = `Take ${take.take}`;
+      q('[data-pd-meta]').textContent = `${script ? script.title + ' · ' : ''}started ${take.started} · ${take.length}${take.markers.length ? ` · ${take.markers.length} marker${take.markers.length > 1 ? 's' : ''}` : ''}`;
+      const row = (icon, html) => `<span class="pd-icon" data-icon="${icon}">${{ ok: '✓', wait: '…', off: '○', bad: '✕' }[icon]}</span><div>${html}</div>`;
+      q('[data-pd-local]').innerHTML = st.local === 'saved' ? row('ok', `<b>Saved on this computer</b><small>${e(st.file || '')} · ${formatTime(st.seconds || 0)}</small>`)
+        : st.local === 'recording' || st.local === 'saving' ? row('wait', '<b>Saving the recording…</b>')
+        : st.local === 'failed' ? row('bad', `<b>Not saved on this computer</b><small>${e(st.error || '')}. The H2 card still has this take.</small>`)
+        : row('off', '<b>Backup recording is off</b><small>The H2 card has this take. Turn it on under Adjust → Backup recording.</small>');
+      q('[data-pd-drive]').innerHTML = st.drive === 'uploading' ? row('wait', `<b>Uploading to Google Drive · ${Math.round((st.progress || 0) * 100)}%</b><span class="pd-bar"><span style="width:${Math.round((st.progress || 0) * 100)}%"></span></span><small>Keep this tab open until it finishes.</small>`)
+        : st.drive === 'done' ? row('ok', `<b>In Google Drive</b><small>${e(st.folder || '')}</small><a class="text-link" href="${e(st.link)}" target="_blank" rel="noopener">Open in Drive ↗</a>`)
+        : st.drive === 'failed' ? row('bad', `<b>Didn’t reach Google Drive</b><small>${e(st.error || '')}. It’s still saved on this computer.</small><button class="text-link" data-pd-retry>Try again</button>`)
+        : st.drive === 'off' ? row('off', '<b>Google Drive upload is off</b><small>Turn it on under Adjust → Backup recording.</small>')
+        : st.drive === 'unconnected' ? row('off', '<b>Google Drive isn’t connected</b><small>An admin connects it under Connections → Google Drive.</small>')
+        : st.drive === 'skipped' ? row('off', '<b>Nothing to upload to Google Drive</b>')
+        : row('wait', '<b>Google Drive upload starts once the file is saved…</b>');
+      q('[data-pd-log]').innerHTML = row('ok', folder ? `<b>Take log updated</b><small>${e(folder.name)}/${e(takeLogName())}</small>` : '<b>Added to the take log</b><small>Adjust → Download take log</small>');
+    }
+    q('[data-p-finish]').onclick = () => finishTake();
+    q('[data-pd-again]').onclick = () => { hideDone(); status('Ready for the next take.'); };
+    q('[data-pd-close]').onclick = hideDone;
+    q('[data-p-done]').addEventListener('click', event => { if (event.target.closest('[data-pd-retry]') && doneTake) { const st = takeState(doneTake); if (st.r) uploadTake(st.r); } });
     loadFolder().then(handle => { if (handle && !folder) { folder = handle; recUi(); } });
     const recTimer = setInterval(() => { if (recorder) q('[data-p-rec]').textContent = `REC ${formatTime(recorder.seconds)}`; }, 500);
 
