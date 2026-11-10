@@ -84,6 +84,7 @@
             <p class="dr-note">Speed is used when not following the voice. Silences scale with it.</p>
           </section>
           <section><h3>Recording</h3>
+            <label class="dr-range dr-reader">Reading <select data-p-reader aria-label="Who is reading"></select><span></span></label>
             <label class="dr-check"><input type="checkbox" data-p-rec-on> Record each take</label>
             <label class="dr-check" data-p-drive-row hidden><input type="checkbox" data-p-drive> Upload each take to Google Drive</label>
             <div class="dr-row"><button class="btn" data-p-folder>Also keep a copy on this computer…</button><span class="dr-folder" data-p-folder-name></span><button class="text-link" data-p-folder-clear hidden>Stop</button></div>
@@ -488,7 +489,7 @@
       if (viewport.scrollTop >= viewport.scrollHeight - viewport.clientHeight - 1 && !activeCue) restart();
       if (fresh || !currentTake) {
         fresh = false;
-        currentTake = { take: takes.length + 1, started: clock(new Date()), length: '00:00', markers: [], input: audio && audio.level.connected ? audio.level.label : '' };
+        currentTake = { take: takes.length + 1, started: clock(new Date()), length: '00:00', markers: [], input: audio && audio.level.connected ? audio.level.label : '', reader: readerName };
         takes.push(currentTake);
         saveTakes();
         prerollUntil = performance.now() + 3000;
@@ -515,7 +516,7 @@
     }
     function takeLogText() {
       const lines = ['THE PROGRAM · TAKE LOG', `Script: ${script ? script.title + ' · v' + script.version : 'Teleprompter draft'}`, `Date: ${today()}`, 'Times are this computer’s clock. Match them to the recorder’s file times.', ''];
-      for (const t of takes) lines.push(`Take ${t.take} · started ${t.started} · length ${t.length}${t.input ? ' · mic: ' + t.input : ''}`, ...(t.file ? [`   Backup file: ${t.file}`] : []), ...(t.drive ? [`   Google Drive: ${t.drive}`] : []), ...t.markers.map((m, i) => `   Marker ${i + 1}: ${m}`));
+      for (const t of takes) lines.push(`Take ${t.take} · started ${t.started} · length ${t.length}${t.reader ? ' · reader: ' + t.reader : ''}${t.input ? ' · mic: ' + t.input : ''}`, ...(t.file ? [`   Backup file: ${t.file}`] : []), ...(t.drive ? [`   Google Drive: ${t.drive}`] : []), ...t.markers.map((m, i) => `   Marker ${i + 1}: ${m}`));
       if (!takes.length) lines.push('No takes recorded yet.');
       return lines.join('\n') + '\n';
     }
@@ -659,6 +660,26 @@
       else status(follow ? 'Follow my voice is on. The script moves while you speak and waits while you pause.' : 'Follow my voice is off. The script scrolls at a steady speed.');
     };
 
+    // ---- Who's reading (tags each take with a person from the talent roster) ----
+    let readerName = '';
+    function setupReader() {
+      const select = q('[data-p-reader]'), note = q('.dr-reader span');
+      const member = window.HubCloud && HubCloud.member();
+      if (member && member.role === 'talent') {
+        readerName = member.display_name || member.email.split('@')[0];
+        select.replaceChildren(new Option(readerName, readerName)); select.disabled = true; note.textContent = '';
+        return;
+      }
+      const names = window.rosterNames ? rosterNames() : [];
+      const assigned = script && script.talent ? names.find(n => script.talent.toLowerCase().includes(n.toLowerCase())) : '';
+      const me = member ? (member.display_name || member.email.split('@')[0]) : '';
+      select.replaceChildren(new Option(me ? `${me} (me)` : 'Me', me), ...names.filter(n => n !== me).map(n => new Option(n, n)));
+      readerName = assigned || me;
+      select.value = readerName;
+      note.textContent = assigned ? 'assigned' : '';
+      select.onchange = () => { readerName = select.value; note.textContent = ''; };
+    }
+
     // ---- Backup recording to a folder ----
     let folder = null, recorder = null;
     const stamp = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return { day: `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`, time: `${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}` }; };
@@ -666,7 +687,8 @@
       const { day, time } = stamp();
       const id = (script && script.piece && script.piece !== 'DEMO' ? script.piece : 'TP').replace(/[^A-Za-z0-9-]/g, '');
       const member = window.HubCloud && HubCloud.member();
-      const who = member ? (member.display_name || member.email.split('@')[0]).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : '';
+      const person = readerName || (member ? (member.display_name || member.email.split('@')[0]) : '');
+      const who = person.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       return `${id}_${day}_${who ? who + '_' : ''}take${String(take.take).padStart(2, '0')}_${time}.wav`;
     }
     function recUi() {
@@ -786,7 +808,7 @@
         upChip('✓ In Drive', 'ok'); refreshDone();
         take.drive = file.link;
         saveTakes();
-        HubDrive.addFile(file, { source: 'Teleprompter', take: take.take, script: script ? script.title : 'Teleprompter draft' });
+        HubDrive.addFile(file, { source: 'Teleprompter', take: take.take, script: script ? script.title : 'Teleprompter draft', talent: take.reader || '' });
         status(`Take ${take.take} is in Google Drive · ${file.folder}`);
         writeLogToFolder();
       } catch (error) {
@@ -823,7 +845,7 @@
       if (!take) return;
       const st = takeState(take), e = escapeHtml;
       q('[data-pd-title]').textContent = `Take ${take.take}`;
-      q('[data-pd-meta]').textContent = `${script ? script.title + ' · ' : ''}started ${take.started} · ${take.length}${take.markers.length ? ` · ${take.markers.length} marker${take.markers.length > 1 ? 's' : ''}` : ''}`;
+      q('[data-pd-meta]').textContent = `${take.reader ? take.reader + ' · ' : ''}${script ? script.title + ' · ' : ''}started ${take.started} · ${take.length}${take.markers.length ? ` · ${take.markers.length} marker${take.markers.length > 1 ? 's' : ''}` : ''}`;
       const row = (icon, html) => `<span class="pd-icon" data-icon="${icon}">${{ ok: '✓', wait: '…', off: '○', bad: '✕' }[icon]}</span><div>${html}</div>`;
       q('[data-pd-local]').innerHTML = st.local === 'memory' ? row('ok', `<b>Recorded</b><small>${e(st.file || '')} · ${formatTime(st.seconds || 0)}</small><button class="text-link" data-pd-download>Download a copy</button>`)
         : st.local === 'saved' ? row('ok', `<b>Saved on this computer</b><small>${e(st.file || '')} · ${formatTime(st.seconds || 0)}</small>`)
@@ -949,6 +971,7 @@
     }, { once: true });
     showThreshold();
     micUi();
+    setupReader();
     recUi();
     fillDevices();
     settings();

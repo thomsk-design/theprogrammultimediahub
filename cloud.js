@@ -4,7 +4,7 @@
 (() => {
   const SUPABASE_URL = 'https://etukrfqlrhiepsedrvzr.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_QV-frUgCkQ02FEd_8_C8wg_Bnfuvid3'; // publishable key: safe in the browser, access is enforced by row-level security
-  const KINDS = ['assets', 'sessions', 'scripts', 'sops', 'tasks', 'files'];
+  const KINDS = ['assets', 'sessions', 'scripts', 'sops', 'tasks', 'files', 'people'];
   const list = kind => (Array.isArray(state[kind]) ? state[kind] : (state[kind] = []));
   const SEP = '\u0000';
   const keyOf = (kind, id) => kind + SEP + id;
