@@ -35,25 +35,51 @@
     const dialog = document.createElement('dialog');
     dialog.className = 'prompter';
     dialog.setAttribute('aria-labelledby', 'prompter-title');
-    dialog.innerHTML = `<header class="prompter-header"><div><div class="eyebrow">YOUR WORDS. YOUR PACE.</div><h2 id="prompter-title">${script ? 'Teleprompter · ' + escapeHtml(script.title) : 'Teleprompter'}</h2></div><button class="btn" data-p-close>Close ×</button></header>
+    dialog.innerHTML = `<header class="prompter-header"><div><div class="eyebrow">YOUR WORDS. YOUR PACE.</div><h2 id="prompter-title">${script ? 'Teleprompter · ' + escapeHtml(script.title) : 'Teleprompter'}</h2></div><div class="ph-actions"><button class="btn" data-p-focus hidden title="Hide controls (H)">Hide controls</button><button class="btn" data-p-close>Close ×</button></div></header>
       <section class="prompter-editor"><label for="prompter-input">Add your script</label><p class="small muted">Paste your words below. Keep line breaks and pause cues wherever you need a breath.</p><textarea id="prompter-input" placeholder="Paste or type your script here…"></textarea><div class="prompter-emphasis-tools"><button class="btn" data-p-highlight>Highlight selected words</button><button class="btn" data-p-clear>Clear emphasis</button><span class="small muted">Select words above, then highlight them for emphasis.</span></div><div class="prompter-emphasis-tools"><label>Silence (seconds at normal speed) <input data-p-gap type="number" min="0.5" max="300" step="0.5" value="3" style="width:85px" aria-label="Silence duration"></label><button class="btn" data-p-insert-gap>Insert silence at cursor</button><span class="small muted">Understands [SILENCE: ~3 SECONDS], [Pause: 5s], plain [Pause] (2s) and [Breath] (1s). At half speed, 3 seconds becomes 6.</span></div><p class="small muted" data-p-saved>Saved in this browser only.</p><button class="btn primary" data-p-read>Open reader →</button></section>
       <section class="prompter-reader" hidden>
-        <div class="prompter-audio">
-          <div class="pa-source"><span class="pa-label">MIC</span><select data-p-device aria-label="Audio input"><option value="">Default input</option></select><button class="btn" data-p-connect>Connect mic</button></div>
-          <div class="pa-meter-wrap"><div class="pa-meter" aria-hidden="true"><div class="pa-fill"></div><div class="pa-peak"></div><div class="pa-threshold"></div></div><div class="pa-scale" aria-hidden="true"><span style="left:0">-72</span><span style="left:33.3%">-48</span><span style="left:66.6%">-24</span><span style="left:91.7%">-6</span><span style="left:100%">0</span></div></div>
-          <output class="pa-db" data-p-db>— dB</output>
-          <span class="pa-light" data-p-voice data-state="off">Mic off</span>
-          <div class="pa-tools"><button class="btn" data-p-calibrate disabled title="Stay quiet for 3 seconds so the desk can hear the room">Room tone</button><label class="pa-sens" title="Level that counts as speaking">Trigger <input type="range" min="-85" max="-15" step="1" data-p-threshold aria-label="Speaking trigger level"><output data-p-threshold-label></output></label><label class="pa-follow" title="Set the trigger automatically, just above the room's background noise"><input type="checkbox" data-p-auto> Auto</label><label class="pa-follow"><input type="checkbox" data-p-follow> Follow my voice</label><span class="pa-mode" data-p-mode></span></div>
+        <div class="prompter-bar">
+          <div class="pb-transport"><button class="btn primary" data-p-play>Start</button><button class="btn" data-p-restart>Restart</button><button class="btn" data-p-mark title="Drop a marker (M)">Mark</button></div>
+          <div class="pb-stats">
+            <div class="pb-stat"><small>Take</small><output data-p-take>—</output></div>
+            <div class="pb-stat"><small>Elapsed</small><output data-p-elapsed>00:00</output></div>
+            <div class="pb-stat"><small>Remaining</small><output data-p-remaining>00:00</output></div>
+            <div class="pb-stat"><small>Pace</small><output data-p-wpm>—</output></div>
+            <div class="pb-stat pb-wide"><small>Next cue</small><output data-p-countdown>—</output></div>
+          </div>
+          <div class="pb-mic prompter-audio">
+            <button class="btn" data-p-connect>Connect mic</button>
+            <div class="pa-meter-wrap"><div class="pa-meter" aria-hidden="true"><div class="pa-fill"></div><div class="pa-peak"></div><div class="pa-threshold"></div></div></div>
+            <output class="pa-db" data-p-db>— dB</output>
+            <span class="pa-light" data-p-voice data-state="off">Mic off</span>
+          </div>
+          <div class="pb-end"><label class="pb-toggle" title="Follow my voice (F)"><input type="checkbox" data-p-follow><span>Follow voice</span></label><button class="btn" data-p-settings aria-expanded="false">Adjust</button></div>
         </div>
-        <div class="prompter-controls"><button class="btn primary" data-p-play>Start</button><button class="btn" data-p-restart>Restart</button><button class="btn" data-p-mark>Mark</button><button class="btn" data-p-edit>Edit script</button><button class="btn" data-p-reader-highlight>Highlight selection</button><button class="btn" data-p-reader-clear>Clear emphasis</button><label>Speed <input type="range" min="10" max="120" step="5" data-p-speed aria-label="Scroll speed"><output data-p-speed-label></output></label><label>Text size <input type="range" min="24" max="80" step="2" data-p-size aria-label="Text size"><output data-p-size-label></output></label></div>
-        <div class="prompter-timing"><span class="pt-take" data-p-take>No takes yet</span><span>Elapsed <output data-p-elapsed>00:00</output></span><span>Remaining ≈ <output data-p-remaining>00:00</output></span><span>Pace ≈ <output data-p-wpm>—</output></span><span data-p-countdown>Silence cues follow your speed.</span><button class="text-link" data-p-takes>Take log ↓</button></div>
-        <p class="prompter-help">Space: start / pause · ← / →: pace · ↑ / ↓: move · M: mark · F: follow voice · Home: restart · Esc: close</p>
+        <div class="prompter-drawer" hidden>
+          <section><h3>Microphone</h3>
+            <div class="dr-row"><select data-p-device aria-label="Audio input"><option value="">Default input</option></select><button class="btn" data-p-disconnect>Disconnect</button></div>
+            <div class="dr-row"><button class="btn" data-p-calibrate disabled title="Stay quiet for 3 seconds so the desk can hear the room">Room tone</button><label class="dr-check" title="Set the trigger automatically, just above the room's background noise"><input type="checkbox" data-p-auto> Auto trigger</label></div>
+            <label class="dr-range">Trigger <input type="range" min="-85" max="-15" step="1" data-p-threshold aria-label="Speaking trigger level"><output data-p-threshold-label></output></label>
+            <p class="dr-note" data-p-mode></p>
+          </section>
+          <section><h3>Reading</h3>
+            <label class="dr-range">Speed <input type="range" min="10" max="120" step="5" data-p-speed aria-label="Scroll speed"><output data-p-speed-label></output></label>
+            <label class="dr-range">Text size <input type="range" min="24" max="80" step="2" data-p-size aria-label="Text size"><output data-p-size-label></output></label>
+            <p class="dr-note">Speed is used when not following the voice. Silences scale with it.</p>
+          </section>
+          <section><h3>Script</h3>
+            <div class="dr-row"><button class="btn" data-p-edit>Edit script</button><button class="btn" data-p-reader-highlight>Highlight selection</button><button class="btn" data-p-reader-clear>Clear emphasis</button></div>
+            <div class="dr-row"><button class="btn" data-p-takes>Download take log ↓</button></div>
+            <p class="dr-note">Space start / pause · ← → speed · ↑ ↓ move · M mark · F follow voice · H hide controls · Home restart · Esc close</p>
+          </section>
+        </div>
         <div class="prompter-stage">
           <div class="prompter-progress" aria-hidden="true"><span></span></div>
           <div class="prompter-guide" aria-hidden="true"></div>
           <div class="prompter-vu" aria-hidden="true"><span></span><i></i></div>
           <div class="prompter-viewport" tabindex="0" aria-label="Script reader. Use Space to pause or resume."><div class="prompter-text"></div></div>
           <div class="prompter-cue" data-p-cue hidden><div class="pc-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="pc-track" cx="60" cy="60" r="52"/><circle class="pc-arc" cx="60" cy="60" r="52" pathLength="100"/></svg><strong data-p-cue-num></strong></div><div class="pc-label" data-p-cue-label></div></div>
+          <button class="prompter-unfocus" data-p-unfocus title="Show controls (H)">Show controls</button>
         </div>
         <div class="prompter-status" role="status" aria-live="polite">Ready when you are.</div>
       </section>`;
@@ -217,16 +243,16 @@
       const recent = paceLog.filter(p => performance.now() - p.t < 20000);
       if (wordsOn && recent.length > 2) {
         const span = Math.max(5000, performance.now() - recent[0].t);
-        q('[data-p-wpm]').textContent = `${Math.round(recent.reduce((t, p) => t + p.n, 0) * 60000 / span)} wpm · you`;
+        q('[data-p-wpm]').textContent = `${Math.round(recent.reduce((t, p) => t + p.n, 0) * 60000 / span)} wpm`;
       } else q('[data-p-wpm]').textContent = pxPerWord ? `${Math.round(speed * 60 / pxPerWord)} wpm` : '—';
       const next = nextCue();
       const until = next ? (cuePosition(next) - position) / speed : null;
-      q('[data-p-countdown]').textContent = activeCue ? `${activeCue.kind === 'breath' ? 'Breath' : 'Silence'} · ${cueSeconds(activeCue).toFixed(1)}s total${playing ? '' : ' · paused'}`
-        : next && until !== null && until >= 0 ? `Next ${cueName(next)} in ≈ ${formatTime(until)} · ${cueSeconds(next).toFixed(1)}s` : cues.length ? 'No more silences' : 'No silence cues in this script';
+      q('[data-p-countdown]').textContent = activeCue ? `${activeCue.kind === 'breath' ? 'Breath' : 'Silence'} now · ${cueSeconds(activeCue).toFixed(1)}s`
+        : next && until !== null && until >= 0 ? `${next.kind === 'breath' ? 'Breath' : 'Silence'} ${cueSeconds(next).toFixed(1)}s${wordsOn ? '' : ' in ' + formatTime(until)}` : cues.length ? 'None left' : 'None';
       for (const cue of cues) cue.element.dataset.duration = `${Number(cueSeconds(cue).toFixed(1))}s ${cueName(cue)}`;
       const max = viewport.scrollHeight - viewport.clientHeight;
       q('.prompter-progress span').style.transform = `scaleX(${max > 0 ? Math.min(1, viewport.scrollTop / max) : 0})`;
-      q('[data-p-take]').textContent = currentTake ? `Take ${currentTake.take} · started ${currentTake.started}` : takes.length ? `${takes.length} take${takes.length > 1 ? 's' : ''} today · next is ${takes.length + 1}` : 'No takes yet';
+      q('[data-p-take]').textContent = currentTake ? `${currentTake.take} · ${currentTake.started.slice(0, 5)}` : `${takes.length + 1} · ready`;
       updateCue();
     }
     function syncCues() {
@@ -432,6 +458,7 @@
       persist();
       editor.hidden = true;
       reader.hidden = false;
+      q('[data-p-focus]').hidden = false;
       renderText();
       restart();
       viewport.focus();
@@ -461,7 +488,7 @@
     function micUi() {
       const on = !!(audio && audio.level.connected);
       reader.classList.toggle('mic-on', on);
-      q('[data-p-connect]').textContent = on ? 'Disconnect' : 'Connect mic';
+      q('[data-p-disconnect]').disabled = !on;
       q('[data-p-calibrate]').disabled = !on;
       if (!on) {
         const light = q('[data-p-voice]');
@@ -506,10 +533,8 @@
       } else if (type === 'devices') fillDevices();
       else if (type === 'calibrated') showThreshold();
     }) : () => {};
-    q('[data-p-connect]').onclick = () => {
-      if (audio && audio.level.connected) { audio.disconnect(); micUi(); status('Microphone disconnected.'); }
-      else connectMic(q('[data-p-device]').value);
-    };
+    q('[data-p-connect]').onclick = () => connectMic(q('[data-p-device]').value);
+    q('[data-p-disconnect]').onclick = () => { if (audio && audio.level.connected) { audio.disconnect(); micUi(); status('Microphone disconnected.'); } };
     q('[data-p-device]').onchange = event => { if (audio && audio.level.connected) connectMic(event.target.value); else if (audio) audio.prefs.deviceId = event.target.value; };
     q('[data-p-calibrate]').onclick = async () => {
       if (playing) pause();
@@ -590,8 +615,14 @@
     q('[data-p-restart]').onclick = restart;
     q('[data-p-mark]').onclick = mark;
     q('[data-p-takes]').onclick = downloadTakes;
-    q('[data-p-edit]').onclick = () => { pause(); reader.hidden = true; editor.hidden = false; input.focus(); };
+    q('[data-p-edit]').onclick = () => { pause(); setFocus(false); reader.hidden = true; editor.hidden = false; q('[data-p-focus]').hidden = true; input.focus(); };
     q('[data-p-close]').onclick = () => dialog.close();
+    const drawer = q('.prompter-drawer');
+    function setDrawer(open) { drawer.hidden = !open; q('[data-p-settings]').setAttribute('aria-expanded', String(open)); q('[data-p-settings]').classList.toggle('active', open); measure(); if (!playing) syncCues(); }
+    function setFocus(on) { dialog.classList.toggle('focus', on); q('[data-p-focus]').setAttribute('aria-pressed', String(on)); if (on) setDrawer(false); measure(); if (!playing) syncCues(); viewport.focus(); }
+    q('[data-p-settings]').onclick = () => setDrawer(drawer.hidden);
+    q('[data-p-focus]').onclick = () => setFocus(true);
+    q('[data-p-unfocus]').onclick = () => setFocus(false);
     q('[data-p-speed]').oninput = event => { speed = Number(event.target.value); settings(); persist(); };
     q('[data-p-size]').oninput = event => { pause(); size = Number(event.target.value); settings(); syncCues(); persist(); };
     for (const event of ['wheel', 'touchstart', 'pointerdown']) viewport.addEventListener(event, () => { if (playing) pause(); }, { passive: true });
@@ -603,6 +634,7 @@
       else if (['ArrowUp', 'ArrowDown'].includes(event.key)) { event.preventDefault(); pause(); viewport.scrollTop += event.key === 'ArrowUp' ? -120 : 120; }
       else if (event.key === 'Home') { event.preventDefault(); restart(); }
       else if (event.key.toLowerCase() === 'm' && !event.repeat) { event.preventDefault(); mark(); }
+      else if (event.key.toLowerCase() === 'h' && !event.repeat) { event.preventDefault(); setFocus(!dialog.classList.contains('focus')); }
       else if (event.key.toLowerCase() === 'f' && !event.repeat) { event.preventDefault(); const box = q('[data-p-follow]'); box.checked = !box.checked; box.onchange({ target: box }); }
     });
     const onVisibility = () => { if (document.hidden && playing) pause(); };
