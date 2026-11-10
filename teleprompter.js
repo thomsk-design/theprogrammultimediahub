@@ -8,7 +8,7 @@
     speed = Math.min(120, Math.max(10, Number(saved.speed) || 40));
     size = Math.min(80, Math.max(24, Number(saved.size) || 44));
     follow = saved.follow === true;
-    recOn = saved.rec === true;
+    recOn = saved.rec !== false; // record takes by default
     driveUp = saved.driveUp !== false;
   } catch {}
   // [SILENCE: ~3 SECONDS], [Pause: 5s], plain [Pause] (2s) and [Breath] (1s)
@@ -83,10 +83,10 @@
             <label class="dr-range">Text size <input type="range" min="24" max="80" step="2" data-p-size aria-label="Text size"><output data-p-size-label></output></label>
             <p class="dr-note">Speed is used when not following the voice. Silences scale with it.</p>
           </section>
-          <section><h3>Backup recording</h3>
-            <label class="dr-check"><input type="checkbox" data-p-rec-on> Record each take to a folder</label>
-            <div class="dr-row"><button class="btn" data-p-folder>Choose folder…</button><span class="dr-folder" data-p-folder-name></span></div>
-            <label class="dr-check" data-p-drive-row hidden><input type="checkbox" data-p-drive> Also upload each take to Google Drive</label>
+          <section><h3>Recording</h3>
+            <label class="dr-check"><input type="checkbox" data-p-rec-on> Record each take</label>
+            <label class="dr-check" data-p-drive-row hidden><input type="checkbox" data-p-drive> Upload each take to Google Drive</label>
+            <div class="dr-row"><button class="btn" data-p-folder>Also keep a copy on this computer…</button><span class="dr-folder" data-p-folder-name></span><button class="text-link" data-p-folder-clear hidden>Stop</button></div>
             <p class="dr-note" data-p-rec-note></p>
           </section>
           <section><h3>Script</h3>
@@ -672,11 +672,15 @@
     function recUi() {
       q('[data-p-rec-on]').checked = recOn;
       q('[data-p-folder]').hidden = !canPickFolder;
-      q('[data-p-folder]').textContent = folder ? 'Change folder…' : 'Choose folder…';
-      q('[data-p-folder-name]').textContent = canPickFolder ? (folder ? folder.name : 'No folder chosen') : '';
-      q('[data-p-rec-note]').textContent = canPickFolder
-        ? 'Saves a 24-bit WAV of the mic feed for every take, plus the take log. The H2 still keeps its own recording.'
-        : 'This browser can’t write to a folder, so each take downloads as a WAV when it ends. Use Chrome to save straight to a folder.';
+      const toDrive = !!(window.HubDrive && HubDrive.connected()) && driveUp;
+      q('[data-p-folder]').textContent = folder ? 'Change computer folder…' : 'Also keep a copy on this computer…';
+      q('[data-p-folder-name]').textContent = folder ? folder.name : '';
+      q('[data-p-folder-clear]').hidden = !folder;
+      q('[data-p-rec-note]').textContent = toDrive
+        ? 'Each take is recorded as a 24-bit WAV and uploaded to the team Google Drive (The Program · Multimedia Hub / 01_Incoming). A copy on this computer is optional. The H2 still keeps its own recording.'
+        : canPickFolder
+          ? 'Each take is recorded as a 24-bit WAV. With Google Drive off, it downloads when the take ends, or saves into the folder you choose here.'
+          : 'Each take is recorded as a 24-bit WAV and downloads when the take ends.';
       const drive = !!(window.HubDrive && HubDrive.connected());
       q('[data-p-drive-row]').hidden = !drive;
       q('[data-p-drive]').checked = driveUp;
@@ -685,7 +689,14 @@
     }
     async function pickFolder() {
       try { folder = await window.showDirectoryPicker({ id: 'program-takes', mode: 'readwrite' }); saveFolder(folder); recUi(); return true; }
-      catch { return false; }
+      catch (error) {
+        if (error && error.name !== 'AbortError') status('Chrome won’t use that folder. Make a new folder (for example “The Program takes” inside Documents) and choose that.');
+        return false;
+      }
+    }
+    function memoryTarget() {
+      const chunks = [];
+      return { async write(bytes) { chunks.push(bytes); }, async finish(header) { chunks[0] = header; const file = new Blob(chunks, { type: 'audio/wav' }); this.blob = async () => file; }, memory: true };
     }
     function fileTarget(writable, handle) {
       return { write: bytes => writable.write(bytes), async finish(header) { await writable.write({ type: 'write', position: 0, data: header }); await writable.close(); }, blob: () => handle.getFile() };
@@ -711,20 +722,20 @@
     async function beginRecording(take) {
       const name = takeFileName(take);
       try {
-        // Folder permission first, while the Start press still counts as a user action.
-        if (canPickFolder && !folder && !(await pickFolder())) throw new Error('no folder chosen');
-        if (folder && (await folder.queryPermission({ mode: 'readwrite' })) !== 'granted' && (await folder.requestPermission({ mode: 'readwrite' })) !== 'granted') throw new Error('folder access wasn’t allowed');
+        // Optional computer copy: check folder permission while the Start press still counts as a user action.
+        if (folder && (await folder.queryPermission({ mode: 'readwrite' })) !== 'granted' && (await folder.requestPermission({ mode: 'readwrite' })) !== 'granted') { folder = null; recUi(); status('No access to the computer folder this time. The take will still go to Google Drive.'); }
         if (!(audio && audio.level.connected)) await connectMic(q('[data-p-device]').value);
         if (!(audio && audio.level.connected)) throw new Error('the microphone isn’t connected');
         const handle = folder ? await folder.getFileHandle(name, { create: true }) : null;
-        const target = handle ? fileTarget(await handle.createWritable(), handle) : downloadTarget(name);
+        const toDrive = !!(window.HubDrive && HubDrive.connected()) && driveUp;
+        const target = handle ? fileTarget(await handle.createWritable(), handle) : toDrive ? memoryTarget() : downloadTarget(name);
         if (take !== currentTake) { await target.finish(new Uint8Array(44)).catch(() => {}); return; }
         recorder = await audio.startRecording(target);
         recorder.take = take;
         recorder.target = target;
         recorder.name = name;
         takeState(take).local = 'recording';
-        take.file = folder ? `${folder.name}/${name}` : `Downloads/${name}`;
+        take.file = folder ? `${folder.name}/${name}` : toDrive ? name : `Downloads/${name}`;
         saveTakes();
         recUi();
       } catch (error) {
@@ -742,8 +753,8 @@
       st.local = 'saving'; st.r = r; refreshDone();
       try {
         const result = await r.stop();
-        Object.assign(st, { local: 'saved', file: r.take.file, seconds: result.seconds });
-        status(`Saved take ${r.take.take} backup · ${formatTime(result.seconds)} · ${r.take.file}`);
+        Object.assign(st, { local: r.target.memory ? 'memory' : 'saved', file: r.take.file, seconds: result.seconds });
+        status(`Recorded take ${r.take.take} · ${formatTime(result.seconds)}`);
         if (driveUp && window.HubDrive && HubDrive.connected() && r.target.blob) uploadTake(r);
         else st.drive = window.HubDrive && HubDrive.connected() ? 'off' : 'unconnected';
       } catch (error) {
@@ -757,13 +768,13 @@
     q('[data-p-rec-on]').onchange = async event => {
       recOn = event.target.checked;
       persist();
-      if (recOn && canPickFolder && !folder) await pickFolder();
       if (!recOn && recorder) await endRecording();
       else if (recOn && playing && currentTake && !recorder) beginRecording(currentTake);
       recUi();
     };
     q('[data-p-folder]').onclick = () => pickFolder();
-    q('[data-p-drive]').onchange = event => { driveUp = event.target.checked; persist(); };
+    q('[data-p-drive]').onchange = event => { driveUp = event.target.checked; persist(); recUi(); };
+    q('[data-p-folder-clear]').onclick = () => { folder = null; saveFolder(null); recUi(); status('Takes won’t be copied to a computer folder.'); };
     async function uploadTake(r) {
       const take = r.take, st = takeState(take);
       Object.assign(st, { drive: 'uploading', progress: 0, error: '' });
@@ -814,14 +825,15 @@
       q('[data-pd-title]').textContent = `Take ${take.take}`;
       q('[data-pd-meta]').textContent = `${script ? script.title + ' · ' : ''}started ${take.started} · ${take.length}${take.markers.length ? ` · ${take.markers.length} marker${take.markers.length > 1 ? 's' : ''}` : ''}`;
       const row = (icon, html) => `<span class="pd-icon" data-icon="${icon}">${{ ok: '✓', wait: '…', off: '○', bad: '✕' }[icon]}</span><div>${html}</div>`;
-      q('[data-pd-local]').innerHTML = st.local === 'saved' ? row('ok', `<b>Saved on this computer</b><small>${e(st.file || '')} · ${formatTime(st.seconds || 0)}</small>`)
+      q('[data-pd-local]').innerHTML = st.local === 'memory' ? row('ok', `<b>Recorded</b><small>${e(st.file || '')} · ${formatTime(st.seconds || 0)}</small><button class="text-link" data-pd-download>Download a copy</button>`)
+        : st.local === 'saved' ? row('ok', `<b>Saved on this computer</b><small>${e(st.file || '')} · ${formatTime(st.seconds || 0)}</small>`)
         : st.local === 'recording' || st.local === 'saving' ? row('wait', '<b>Saving the recording…</b>')
         : st.local === 'failed' ? row('bad', `<b>Not saved on this computer</b><small>${e(st.error || '')}. The H2 card still has this take.</small>`)
-        : row('off', '<b>Backup recording is off</b><small>The H2 card has this take. Turn it on under Adjust → Backup recording.</small>');
+        : row('off', '<b>Recording is off</b><small>The H2 card has this take. Turn it on under Adjust → Recording.</small>');
       q('[data-pd-drive]').innerHTML = st.drive === 'uploading' ? row('wait', `<b>Uploading to Google Drive · ${Math.round((st.progress || 0) * 100)}%</b><span class="pd-bar"><span style="width:${Math.round((st.progress || 0) * 100)}%"></span></span><small>Keep this tab open until it finishes.</small>`)
         : st.drive === 'done' ? row('ok', `<b>In Google Drive</b><small>${e(st.folder || '')}</small><a class="text-link" href="${e(st.link)}" target="_blank" rel="noopener">Open in Drive ↗</a>`)
-        : st.drive === 'failed' ? row('bad', `<b>Didn’t reach Google Drive</b><small>${e(st.error || '')}. It’s still saved on this computer.</small><button class="text-link" data-pd-retry>Try again</button>`)
-        : st.drive === 'off' ? row('off', '<b>Google Drive upload is off</b><small>Turn it on under Adjust → Backup recording.</small>')
+        : st.drive === 'failed' ? row('bad', `<b>Didn’t reach Google Drive</b><small>${e(st.error || '')}. ${st.local === 'memory' ? 'Download a copy above so it isn’t lost.' : 'It’s still saved on this computer.'}</small><button class="text-link" data-pd-retry>Try again</button>`)
+        : st.drive === 'off' ? row('off', '<b>Google Drive upload is off</b><small>Turn it on under Adjust → Recording.</small>')
         : st.drive === 'unconnected' ? row('off', '<b>Google Drive isn’t connected</b><small>An admin connects it under Connections → Google Drive.</small>')
         : st.drive === 'skipped' ? row('off', '<b>Nothing to upload to Google Drive</b>')
         : row('wait', '<b>Google Drive upload starts once the file is saved…</b>');
@@ -830,7 +842,16 @@
     q('[data-p-finish]').onclick = () => finishTake();
     q('[data-pd-again]').onclick = () => { hideDone(); status('Ready for the next take.'); };
     q('[data-pd-close]').onclick = hideDone;
-    q('[data-p-done]').addEventListener('click', event => { if (event.target.closest('[data-pd-retry]') && doneTake) { const st = takeState(doneTake); if (st.r) uploadTake(st.r); } });
+    q('[data-p-done]').addEventListener('click', async event => {
+      if (!doneTake) return;
+      const st = takeState(doneTake);
+      if (event.target.closest('[data-pd-retry]') && st.r) uploadTake(st.r);
+      if (event.target.closest('[data-pd-download]') && st.r && st.r.target.blob) {
+        const url = URL.createObjectURL(await st.r.target.blob());
+        const a = document.createElement('a'); a.href = url; a.download = st.r.name; document.body.append(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
+    });
     loadFolder().then(handle => { if (handle && !folder) { folder = handle; recUi(); } });
     const recTimer = setInterval(() => { if (recorder) q('[data-p-rec]').textContent = `REC ${formatTime(recorder.seconds)}`; }, 500);
 
