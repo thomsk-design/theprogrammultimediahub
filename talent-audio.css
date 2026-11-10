@@ -17,3 +17,8 @@
 @keyframes prompter-flash{0%{box-shadow:inset 0 0 0 3px var(--gold)}100%{box-shadow:inset 0 0 0 3px transparent}}.prompter-viewport.flash{animation:prompter-flash .7s ease-out}
 @media(max-width:600px){.prompter-audio{margin:10px 12px 0;padding:10px}.pa-source select{max-width:150px}.prompter-cue{right:10px;padding:10px}.pc-ring{width:70px;height:70px}.pc-ring strong{font-size:28px}}
 .prompter-header .btn{white-space:nowrap;flex-shrink:0}
+.prompter-text .w{transition:color .25s}.prompter-text .w.said{color:#8f8a81}.prompter-text mark .w.said{color:#6b5a26}.prompter-text .w.now{text-decoration:underline 3px var(--gold);text-underline-offset:.2em}
+.pa-mode{font-size:11px;color:#b5b1a9}
+.prompter-vu{position:absolute;left:30px;top:calc(15vh - 100px);width:14px;height:240px;border-radius:7px;background:#2b2722;z-index:3;display:none;overflow:hidden;pointer-events:none;transition:box-shadow .12s}.mic-on .prompter-vu{display:block}.prompter-vu span{position:absolute;inset:0;background:linear-gradient(0deg,#5d9c6c 0,#7dbb7f 66%,#e4c25a 88%,#e0704f 97%);clip-path:inset(100% 0 0 0)}.prompter-vu i{position:absolute;left:0;right:0;height:2px;background:var(--gold)}.prompter-vu.voice{box-shadow:0 0 14px rgba(111,207,122,.65)}
+.prompter-cue[data-mode=preroll] .pc-arc{stroke:#e0704f}.prompter-cue[data-mode=preroll] .pc-label{color:#f2efe8}
+@media(max-width:600px){.prompter-vu{left:4px;width:8px;height:180px}}

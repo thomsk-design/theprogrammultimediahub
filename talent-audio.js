@@ -119,6 +119,7 @@ window.TalentAudio = (() => {
 
   return {
     supported, devices, connect, disconnect, calibrate, setThreshold, setAuto, level, prefs,
+    track: () => (stream ? stream.getAudioTracks()[0] : null),
     on(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   };
 })();

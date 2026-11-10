@@ -43,7 +43,7 @@
           <div class="pa-meter-wrap"><div class="pa-meter" aria-hidden="true"><div class="pa-fill"></div><div class="pa-peak"></div><div class="pa-threshold"></div></div><div class="pa-scale" aria-hidden="true"><span style="left:0">-72</span><span style="left:33.3%">-48</span><span style="left:66.6%">-24</span><span style="left:91.7%">-6</span><span style="left:100%">0</span></div></div>
           <output class="pa-db" data-p-db>— dB</output>
           <span class="pa-light" data-p-voice data-state="off">Mic off</span>
-          <div class="pa-tools"><button class="btn" data-p-calibrate disabled title="Stay quiet for 3 seconds so the desk can hear the room">Room tone</button><label class="pa-sens" title="Level that counts as speaking">Trigger <input type="range" min="-85" max="-15" step="1" data-p-threshold aria-label="Speaking trigger level"><output data-p-threshold-label></output></label><label class="pa-follow" title="Set the trigger automatically, just above the room's background noise"><input type="checkbox" data-p-auto> Auto</label><label class="pa-follow"><input type="checkbox" data-p-follow> Follow my voice</label></div>
+          <div class="pa-tools"><button class="btn" data-p-calibrate disabled title="Stay quiet for 3 seconds so the desk can hear the room">Room tone</button><label class="pa-sens" title="Level that counts as speaking">Trigger <input type="range" min="-85" max="-15" step="1" data-p-threshold aria-label="Speaking trigger level"><output data-p-threshold-label></output></label><label class="pa-follow" title="Set the trigger automatically, just above the room's background noise"><input type="checkbox" data-p-auto> Auto</label><label class="pa-follow"><input type="checkbox" data-p-follow> Follow my voice</label><span class="pa-mode" data-p-mode></span></div>
         </div>
         <div class="prompter-controls"><button class="btn primary" data-p-play>Start</button><button class="btn" data-p-restart>Restart</button><button class="btn" data-p-mark>Mark</button><button class="btn" data-p-edit>Edit script</button><button class="btn" data-p-reader-highlight>Highlight selection</button><button class="btn" data-p-reader-clear>Clear emphasis</button><label>Speed <input type="range" min="10" max="120" step="5" data-p-speed aria-label="Scroll speed"><output data-p-speed-label></output></label><label>Text size <input type="range" min="24" max="80" step="2" data-p-size aria-label="Text size"><output data-p-size-label></output></label></div>
         <div class="prompter-timing"><span class="pt-take" data-p-take>No takes yet</span><span>Elapsed <output data-p-elapsed>00:00</output></span><span>Remaining ≈ <output data-p-remaining>00:00</output></span><span>Pace ≈ <output data-p-wpm>—</output></span><span data-p-countdown>Silence cues follow your speed.</span><button class="text-link" data-p-takes>Take log ↓</button></div>
@@ -51,6 +51,7 @@
         <div class="prompter-stage">
           <div class="prompter-progress" aria-hidden="true"><span></span></div>
           <div class="prompter-guide" aria-hidden="true"></div>
+          <div class="prompter-vu" aria-hidden="true"><span></span><i></i></div>
           <div class="prompter-viewport" tabindex="0" aria-label="Script reader. Use Space to pause or resume."><div class="prompter-text"></div></div>
           <div class="prompter-cue" data-p-cue hidden><div class="pc-ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="pc-track" cx="60" cy="60" r="52"/><circle class="pc-arc" cx="60" cy="60" r="52" pathLength="100"/></svg><strong data-p-cue-num></strong></div><div class="pc-label" data-p-cue-label></div></div>
         </div>
@@ -86,6 +87,105 @@
     }
     function nextCue() { return cues.find(c => c !== activeCue && !completedCues.has(c.index)); }
 
+    // ---- Word tracking: listen to the words and keep the script on the line being read ----
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let words = [], cursor = 0, rec = null, recWanted = false, recWhere = '', wordsOn = false, wordsFailed = false, paceLog = [], prerollUntil = 0;
+    function normWord(word) { return word.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]/g, ''); }
+    const same = (a, b) => a === b || (a.length > 3 && b.length > 3 && (a.startsWith(b) || b.startsWith(a)));
+    function offsetOf(el) { return Math.max(0, el.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop - window.innerHeight * 0.15); }
+    function paintWords(from, to) {
+      for (let i = Math.max(0, from); i < Math.min(words.length, to); i++) words[i].el.classList.add('said');
+      const now = q('.prompter-text .w.now');
+      if (now) now.classList.remove('now');
+      if (words[cursor] && wordsOn) words[cursor].el.classList.add('now');
+    }
+    function clearWords() { for (const w of words) w.el.classList.remove('said', 'now'); }
+    function advanceTo(n, strong) {
+      if (activeCue) {
+        if (!(strong && n > activeCue.wordIndex)) return;           // still in the pause
+        completedCues.add(activeCue.index); activeCue = null;          // they read on, so skip the rest of the pause
+      }
+      if (n <= cursor) return;
+      for (const c of cues) {
+        if (completedCues.has(c.index) || c.wordIndex <= cursor || c.wordIndex > n) continue;
+        if (c.wordIndex < n && strong) { completedCues.add(c.index); continue; }
+        n = c.wordIndex; activeCue = c; c.remaining = c.seconds;
+        break;
+      }
+      paceLog.push({ t: performance.now(), n: n - cursor });
+      const from = cursor;
+      cursor = n;
+      paintWords(from, n);
+    }
+    function align(heard) {
+      if (!heard.length || !words.length) return;
+      const tail = heard.slice(-6);
+      let best = null;
+      for (let j = Math.max(0, cursor - 2), hi = Math.min(words.length - 1, cursor + 30); j <= hi; j++) {
+        let k = tail.length - 1, i = j, score = 0, misses = 0;
+        while (k >= 0 && i >= 0 && misses <= 2) {
+          if (same(tail[k], words[i].norm)) { score++; k--; i--; }
+          else if (k > 0 && same(tail[k - 1], words[i].norm)) { k--; misses++; }
+          else { i--; misses++; }
+        }
+        const reach = j + 1 - cursor;
+        if (score < (tail.length >= 3 ? 2 : 1) || (score < 2 && reach > 3)) continue;
+        const value = score * 10 - Math.abs(reach) * 0.4;
+        if (!best || value > best.value) best = { j, value, score };
+      }
+      if (best) advanceTo(best.j + 1, best.score >= 3);
+    }
+    function syncCursor() {
+      if (!words.length || (words[cursor] && Math.abs(offsetOf(words[cursor].el) - viewport.scrollTop) < 60)) return;
+      const index = words.findIndex(w => offsetOf(w.el) >= viewport.scrollTop - 4);
+      cursor = index < 0 ? words.length : index;
+      clearWords(); paintWords(0, cursor);
+      for (const c of cues) if (c.wordIndex < cursor || (c.wordIndex === cursor && cursor > 0 && offsetOf(c.element) < viewport.scrollTop - 4)) completedCues.add(c.index);
+    }
+    function modeLabel() {
+      q('[data-p-mode]').textContent = !follow ? '' : !SR ? 'Voice level only (this browser can’t follow words)' : wordsFailed ? 'Voice level (word following unavailable)' : wordsOn ? `Following words · heard on ${recWhere}` : 'Follows your words when you press Start';
+    }
+    function launch() {
+      const track = audio && audio.track && audio.track();
+      try { if (track) rec.start(track); else rec.start(); }
+      catch { try { rec.start(); } catch {} }
+    }
+    async function startRecognition() {
+      if (!SR) { modeLabel(); return false; }
+      if (rec) return true;
+      recWanted = true; wordsOn = true; recWhere = 'an online speech service';
+      const r = rec = new SR();
+      r.continuous = true; r.interimResults = true; r.lang = 'en-US'; r.maxAlternatives = 1;
+      try {
+        if ('processLocally' in r && SR.available && await SR.available({ langs: ['en-US'], processLocally: true }) === 'available') { r.processLocally = true; recWhere = 'this computer'; }
+      } catch {}
+      r.onresult = event => {
+        if (rec !== r) return;
+        let text = '';
+        for (let i = 0; i < event.results.length; i++) text += ' ' + event.results[i][0].transcript;
+        align((text.match(/\S+/g) || []).map(normWord).filter(Boolean));
+      };
+      r.onerror = event => {
+        if (rec !== r || ['no-speech', 'aborted'].includes(event.error)) return;
+        wordsFailed = true;
+        stopRecognition();
+        modeLabel();
+        status(event.error === 'not-allowed' || event.error === 'service-not-allowed' ? 'Word following was blocked by the browser. Following voice level instead.' : event.error === 'network' ? 'Can’t reach the speech service. Following voice level instead.' : 'Word following stopped. Following voice level instead.');
+      };
+      r.onend = () => { if (rec === r && recWanted) setTimeout(() => { if (rec === r && recWanted) launch(); }, 120); };
+      if (rec === r && recWanted) launch();
+      modeLabel();
+      return true;
+    }
+    function stopRecognition() {
+      recWanted = false; wordsOn = false;
+      const r = rec; rec = null;
+      if (r) { try { r.abort(); } catch {} }
+      const now = q('.prompter-text .w.now');
+      if (now) now.classList.remove('now');
+      modeLabel();
+    }
+
     function showCue(mode, number, label, fraction = 1) {
       cueBox.hidden = false;
       cueBox.dataset.mode = mode;
@@ -114,7 +214,11 @@
       const silenceSeconds = cues.reduce((total, cue) => total + (completedCues.has(cue.index) ? 0 : cue === activeCue ? cue.remaining : cue.seconds), 0) * 40 / speed;
       q('[data-p-remaining]').textContent = formatTime(scrollSeconds + silenceSeconds);
       if (!pxPerWord) measure();
-      q('[data-p-wpm]').textContent = pxPerWord ? `${Math.round(speed * 60 / pxPerWord)} wpm` : '—';
+      const recent = paceLog.filter(p => performance.now() - p.t < 20000);
+      if (wordsOn && recent.length > 2) {
+        const span = Math.max(5000, performance.now() - recent[0].t);
+        q('[data-p-wpm]').textContent = `${Math.round(recent.reduce((t, p) => t + p.n, 0) * 60000 / span)} wpm · you`;
+      } else q('[data-p-wpm]').textContent = pxPerWord ? `${Math.round(speed * 60 / pxPerWord)} wpm` : '—';
       const next = nextCue();
       const until = next ? (cuePosition(next) - position) / speed : null;
       q('[data-p-countdown]').textContent = activeCue ? `${activeCue.kind === 'breath' ? 'Breath' : 'Silence'} · ${cueSeconds(activeCue).toFixed(1)}s total${playing ? '' : ' · paused'}`
@@ -140,16 +244,32 @@
       for (const match of matches) { boundaries.add(match.index); boundaries.add(match.index + match.length); }
       const points = [...boundaries].sort((a, b) => a - b);
       cues = [];
+      words = [];
+      cursor = 0;
       for (let i = 0; i < points.length - 1; i++) {
         const start = points[i], end = points[i + 1];
         const match = matches.find(m => start >= m.index && end <= m.index + m.length);
         const emphasized = ranges.some(r => start >= r[0] && end <= r[1]);
         const element = document.createElement(match ? 'span' : emphasized ? 'mark' : 'span');
-        element.textContent = input.value.slice(start, end);
+        const slice = input.value.slice(start, end);
         if (match) {
           // Preserve the original cue text so emphasis selections retain their offsets.
+          element.textContent = slice;
           element.className = 'prompter-silence' + (match.kind === 'breath' ? ' is-breath' : '');
-          if (!cues.some(c => c.index === match.index)) cues.push({ index: match.index, kind: match.kind, seconds: match.seconds, remaining: match.seconds, element });
+          // wordIndex: the first word after this cue. The cue runs once every word before it has been heard.
+          if (!cues.some(c => c.index === match.index)) cues.push({ index: match.index, kind: match.kind, seconds: match.seconds, remaining: match.seconds, element, wordIndex: words.length });
+        } else {
+          // Wrap each word so it can be tracked and highlighted. Text content is unchanged.
+          for (const part of slice.split(/(\s+)/)) {
+            if (!part) continue;
+            if (/^\s+$/.test(part)) { element.append(part); continue; }
+            const span = document.createElement('span');
+            span.className = 'w';
+            span.textContent = part;
+            element.append(span);
+            const norm = normWord(part);
+            if (norm) words.push({ norm, el: span });
+          }
         }
         target.append(element);
       }
@@ -185,6 +305,8 @@
 
     function pause(message = 'Paused. Take your time.') {
       playing = false;
+      prerollUntil = 0;
+      if (rec) stopRecognition();
       holding = false;
       cancelAnimationFrame(frame);
       last = null;
@@ -196,11 +318,27 @@
     }
     function tick(time) {
       if (!playing) return;
+      if (performance.now() < prerollUntil) {
+        const left = (prerollUntil - performance.now()) / 1000;
+        showCue('preroll', Math.ceil(left), 'Is the H2 recording?', left / 3);
+        status('Check the red record light on the H2. Starting in a moment…');
+        last = null;
+        frame = requestAnimationFrame(tick);
+        return;
+      }
       if (last !== null) {
         const dt = Math.min((time - last) / 1000, 0.1);
         const hearing = listening();
         elapsed += dt;
-        if (activeCue) {
+        if (wordsOn) {
+          if (activeCue) {
+            if (!(audio && audio.level.connected) || !audio.level.voice) activeCue.remaining = Math.max(0, activeCue.remaining - dt * speed / 40);
+            if (activeCue.remaining === 0) { completedCues.add(activeCue.index); activeCue = null; goUntil = performance.now() + 900; paintWords(cursor, cursor); }
+          }
+          const el = activeCue ? activeCue.element : (words[cursor] || words[words.length - 1] || {}).el;
+          if (el) { position += (offsetOf(el) - position) * Math.min(1, dt * 4); viewport.scrollTop = position; }
+          status(activeCue ? (audio && audio.level.voice ? 'Waiting for quiet before the silence counts down.' : 'Hold the silence…') : cursor === 0 ? 'Listening… start reading and the script will follow your words.' : 'Following your words.');
+        } else if (activeCue) {
           // With the mic on, a silence only counts down while the room is actually quiet.
           if (!hearing || !audio.level.voice) activeCue.remaining = Math.max(0, activeCue.remaining - dt * speed / 40);
           if (activeCue.remaining === 0) { completedCues.add(activeCue.index); activeCue = null; goUntil = performance.now() + 900; }
@@ -221,7 +359,7 @@
         timing();
       }
       last = time;
-      if (!activeCue && cues.every(c => completedCues.has(c.index)) && viewport.scrollTop >= viewport.scrollHeight - viewport.clientHeight - 1) {
+      if (wordsOn ? cursor >= words.length && !activeCue && cues.every(c => completedCues.has(c.index)) : !activeCue && cues.every(c => completedCues.has(c.index)) && viewport.scrollTop >= viewport.scrollHeight - viewport.clientHeight - 1) {
         pause('End of script. Restart for another take.');
         currentTake = null;
         timing();
@@ -237,13 +375,15 @@
         currentTake = { take: takes.length + 1, started: clock(new Date()), length: '00:00', markers: [], input: audio && audio.level.connected ? audio.level.label : '' };
         takes.push(currentTake);
         saveTakes();
+        prerollUntil = performance.now() + 3000;
       }
       position = viewport.scrollTop;
+      if (follow && SR && !wordsFailed) { startRecognition(); syncCursor(); }
       playing = true;
       last = null;
       q('[data-p-play]').textContent = 'Pause';
       q('[data-p-play]').setAttribute('aria-pressed', 'true');
-      status(listening() ? 'Listening… start speaking and the script will follow you.' : 'Reading · your pace, your pauses.');
+      if (!prerollUntil) status(wordsOn ? 'Listening… start reading and the script will follow your words.' : listening() ? 'Listening… start speaking and the script will follow you.' : 'Reading · your pace, your pauses.');
       frame = requestAnimationFrame(tick);
     }
     function mark() {
@@ -282,6 +422,7 @@
       viewport.scrollTop = position = 0;
       elapsed = 0; activeCue = null; completedCues.clear(); goUntil = 0;
       fresh = true; currentTake = null;
+      cursor = 0; paceLog = []; clearWords();
       for (const cue of cues) cue.remaining = cue.seconds;
       timing();
       q('[data-p-play]').textContent = 'Start';
@@ -354,6 +495,9 @@
         if (light.dataset.state !== state) { light.dataset.state = state; light.textContent = level.voice ? 'Speaking' : 'Quiet'; }
         q('.prompter-audio').classList.toggle('hot', level.hot);
         if (audio.prefs.auto) showThreshold();
+        q('.prompter-vu span').style.clipPath = `inset(${100 - parseFloat(meterPct(level.rms))}% 0 0 0)`;
+        q('.prompter-vu i').style.bottom = meterPct(level.threshold);
+        q('.prompter-vu').classList.toggle('voice', level.voice);
         if (!playing) updateCue();
       } else if (type === 'lost') {
         micUi();
@@ -383,6 +527,9 @@
     q('[data-p-follow]').onchange = event => {
       follow = event.target.checked;
       persist();
+      if (!follow && rec) stopRecognition();
+      else if (follow && playing && SR && !wordsFailed) { startRecognition(); syncCursor(); }
+      modeLabel();
       if (follow && !(audio && audio.level.connected)) connectMic(q('[data-p-device]').value);
       else status(follow ? 'Follow my voice is on. The script moves while you speak and waits while you pause.' : 'Follow my voice is off. The script scrolls at a steady speed.');
     };
@@ -464,6 +611,7 @@
     window.addEventListener('resize', onResize);
     dialog.addEventListener('close', () => {
       pause();
+      stopRecognition();
       offAudio();
       if (audio) audio.disconnect(true);
       document.removeEventListener('visibilitychange', onVisibility);
@@ -474,6 +622,7 @@
     micUi();
     fillDevices();
     settings();
+    modeLabel();
     dialog.showModal();
     if (script) read(); else input.focus();
   }
