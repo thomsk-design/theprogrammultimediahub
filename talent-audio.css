@@ -36,7 +36,7 @@ dialog.prompter .prompter-reader[hidden],dialog.prompter .prompter-editor[hidden
 [data-p-settings].active{border-color:var(--gold);color:var(--gold)}
 
 /* Drawer */
-.prompter-drawer{flex:none;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;background:#181512;border-bottom:1px solid #2b2722}
+.prompter-drawer{flex:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;background:#181512;border-bottom:1px solid #2b2722}
 .prompter-drawer[hidden]{display:none}
 .prompter-drawer section{display:flex;flex-direction:column;gap:12px;padding:18px 24px;border-left:1px solid #2b2722}.prompter-drawer section:first-child{border-left:0}
 .prompter-drawer h3{margin:0;font-size:9px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#8f8a81}
@@ -93,3 +93,8 @@ dialog.prompter.focus .prompter-unfocus{display:block}
 
 @media(max-width:1100px){.mic-on .prompter-text{padding-left:66px}.prompter-bar{grid-template-columns:auto 1fr auto;row-gap:12px}.pb-stats{grid-column:1/-1;grid-row:2;justify-content:flex-start}.pb-stat:first-child{padding-left:0}.pb-mic{border-left:0;padding-left:0;justify-self:end}}
 @media(max-width:760px){.mic-on .prompter-text{padding-left:28px}.prompter-bar{grid-template-columns:1fr auto;padding:10px 14px}.pb-mic{grid-column:1/-1;grid-row:3;justify-self:start}.pb-stats{overflow-x:auto}.pb-stat{padding:0 12px}.prompter-drawer{grid-template-columns:1fr}.prompter-drawer section{border-left:0;border-top:1px solid #2b2722;padding:14px}.prompter-vu{left:4px;width:8px;height:180px}.prompter-cue{right:10px;padding:10px}.pc-ring{width:70px;height:70px}.pc-ring strong{font-size:28px}dialog.prompter .prompter-header{padding:12px 14px}}
+.pb-rec{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;background:rgba(224,112,79,.14);color:#f08a6c;font-size:11px;font-weight:700;letter-spacing:.06em;font-variant-numeric:tabular-nums;white-space:nowrap}.pb-rec::before{content:'';width:7px;height:7px;border-radius:50%;background:#e0704f;animation:prompter-rec 1.2s infinite}.pb-rec[hidden]{display:none}
+@keyframes prompter-rec{50%{opacity:.25}}
+.dr-folder{font-size:12px;color:#f2efe8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
+@media(max-width:1100px){.prompter-drawer{grid-template-columns:repeat(2,minmax(0,1fr))}.prompter-drawer section:nth-child(3){border-left:0}.prompter-drawer section:nth-child(n+3){border-top:1px solid #2b2722}}
+@media(max-width:760px){.prompter-drawer{grid-template-columns:1fr}.prompter-drawer section{border-left:0}}

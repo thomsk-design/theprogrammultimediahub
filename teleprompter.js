@@ -1,19 +1,32 @@
 (() => {
   const storageKey = 'program-teleprompter-v1';
   const audio = window.TalentAudio;
-  let draft = '', speed = 40, size = 44, follow = false;
+  let draft = '', speed = 40, size = 44, follow = false, recOn = false;
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
     draft = typeof saved.text === 'string' ? saved.text : '';
     speed = Math.min(120, Math.max(10, Number(saved.speed) || 40));
     size = Math.min(80, Math.max(24, Number(saved.size) || 44));
     follow = saved.follow === true;
+    recOn = saved.rec === true;
   } catch {}
   // [SILENCE: ~3 SECONDS], [Pause: 5s], plain [Pause] (2s) and [Breath] (1s)
   const cuePattern = /\[\s*(silence|pause|breath)\s*(?::\s*(?:\\?~\s*)?(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)?)?\s*\]/gi;
   const cueDefaults = { silence: 2, pause: 2, breath: 1 };
   const clock = date => date.toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   const today = () => new Date().toLocaleDateString('en-CA');
+  // Remember the chosen takes folder between visits (Chrome / Edge only).
+  const canPickFolder = typeof window.showDirectoryPicker === 'function';
+  function kv(mode, fn) {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('program-talent', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('kv');
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => { const tx = req.result.transaction('kv', mode); const r = fn(tx.objectStore('kv')); tx.oncomplete = () => resolve(r && r.result); tx.onerror = () => reject(tx.error); };
+    });
+  }
+  const loadFolder = () => kv('readonly', st => st.get('takes-folder')).catch(() => null);
+  const saveFolder = handle => kv('readwrite', st => st.put(handle, 'takes-folder')).catch(() => {});
   const escapeHtml = v => String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   function open(script) {
@@ -50,6 +63,7 @@
           <div class="pb-mic prompter-audio">
             <button class="btn" data-p-connect>Connect mic</button>
             <div class="pa-meter-wrap"><div class="pa-meter" aria-hidden="true"><div class="pa-fill"></div><div class="pa-peak"></div><div class="pa-threshold"></div></div></div>
+            <span class="pb-rec" data-p-rec hidden></span>
             <output class="pa-db" data-p-db>— dB</output>
             <span class="pa-light" data-p-voice data-state="off">Mic off</span>
           </div>
@@ -66,6 +80,11 @@
             <label class="dr-range">Speed <input type="range" min="10" max="120" step="5" data-p-speed aria-label="Scroll speed"><output data-p-speed-label></output></label>
             <label class="dr-range">Text size <input type="range" min="24" max="80" step="2" data-p-size aria-label="Text size"><output data-p-size-label></output></label>
             <p class="dr-note">Speed is used when not following the voice. Silences scale with it.</p>
+          </section>
+          <section><h3>Backup recording</h3>
+            <label class="dr-check"><input type="checkbox" data-p-rec-on> Record each take to a folder</label>
+            <div class="dr-row"><button class="btn" data-p-folder>Choose folder…</button><span class="dr-folder" data-p-folder-name></span></div>
+            <p class="dr-note" data-p-rec-note></p>
           </section>
           <section><h3>Script</h3>
             <div class="dr-row"><button class="btn" data-p-edit>Edit script</button><button class="btn" data-p-reader-highlight>Highlight selection</button><button class="btn" data-p-reader-clear>Clear emphasis</button></div>
@@ -296,6 +315,7 @@
       for (const cue of cues) cue.element.dataset.duration = `${Number(cueSeconds(cue).toFixed(1))}s ${cueName(cue)}`;
       const max = viewport.scrollHeight - viewport.clientHeight;
       q('.prompter-progress span').style.transform = `scaleX(${max > 0 ? Math.min(1, viewport.scrollTop / max) : 0})`;
+      if (recorder) q('[data-p-rec]').textContent = `REC ${formatTime(recorder.seconds)}`;
       q('[data-p-take]').textContent = currentTake ? `${currentTake.take} · ${currentTake.started.slice(0, 5)}` : `${takes.length + 1} · ready`;
       updateCue();
     }
@@ -366,7 +386,7 @@
     function persist() {
       draft = input.value;
       try {
-        localStorage.setItem(storageKey, JSON.stringify({ text: draft, speed, size, follow }));
+        localStorage.setItem(storageKey, JSON.stringify({ text: draft, speed, size, follow, rec: recOn }));
         localStorage.setItem(emphasisKey, JSON.stringify({ text: input.value, ranges, source: script ? script.body : null }));
         q('[data-p-saved]').textContent = 'Saved in this browser only.';
       } catch { q('[data-p-saved]').textContent = 'Browser storage unavailable. Keep a copy of your script before closing.'; }
@@ -453,6 +473,7 @@
       last = time;
       if (wordsOn ? cursor >= words.length && !activeCue && cues.every(c => completedCues.has(c.index)) : !activeCue && cues.every(c => completedCues.has(c.index)) && viewport.scrollTop >= viewport.scrollHeight - viewport.clientHeight - 1) {
         pause('End of script. Restart for another take.');
+        endRecording();
         currentTake = null;
         timing();
         return;
@@ -468,6 +489,7 @@
         takes.push(currentTake);
         saveTakes();
         prerollUntil = performance.now() + 3000;
+        if (recOn) beginRecording(currentTake);
       }
       position = viewport.scrollTop;
       sIdx = cursor; sVel = 0; vel = 0; pVel = 0; quietSince = 0;
@@ -488,15 +510,19 @@
       void viewport.offsetWidth;
       viewport.classList.add('flash');
     }
+    function takeLogText() {
+      const lines = ['THE PROGRAM · TAKE LOG', `Script: ${script ? script.title + ' · v' + script.version : 'Teleprompter draft'}`, `Date: ${today()}`, 'Times are this computer’s clock. Match them to the recorder’s file times.', ''];
+      for (const t of takes) lines.push(`Take ${t.take} · started ${t.started} · length ${t.length}${t.input ? ' · mic: ' + t.input : ''}`, ...(t.file ? [`   Backup file: ${t.file}`] : []), ...t.markers.map((m, i) => `   Marker ${i + 1}: ${m}`));
+      if (!takes.length) lines.push('No takes recorded yet.');
+      return lines.join('\n') + '\n';
+    }
+    const takeLogName = () => `${script ? (script.piece || 'script') + '_' : ''}take-log_${today()}.txt`;
     function downloadTakes() {
       closeTake();
-      const lines = ['THE PROGRAM · TAKE LOG', `Script: ${script ? script.title + ' · v' + script.version : 'Teleprompter draft'}`, `Date: ${today()}`, 'Times are this computer’s clock. Match them to the recorder’s file times.', ''];
-      for (const t of takes) lines.push(`Take ${t.take} · started ${t.started} · length ${t.length}${t.input ? ' · mic: ' + t.input : ''}`, ...t.markers.map((m, i) => `   Marker ${i + 1}: ${m}`));
-      if (!takes.length) lines.push('No takes recorded yet.');
-      const url = URL.createObjectURL(new Blob([lines.join('\n') + '\n'], { type: 'text/plain' }));
+      const url = URL.createObjectURL(new Blob([takeLogText()], { type: 'text/plain' }));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${script ? (script.piece || 'script') + '_' : ''}take-log_${today()}.txt`;
+      a.download = takeLogName();
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
@@ -513,6 +539,7 @@
     }
     function restart() {
       pause('Back at the beginning. Ready for another take.');
+      if (recorder) endRecording();
       viewport.scrollTop = position = 0;
       elapsed = 0; activeCue = null; completedCues.clear(); goUntil = 0;
       fresh = true; currentTake = null;
@@ -597,13 +624,14 @@
         if (!playing) updateCue();
       } else if (type === 'lost') {
         micUi();
+        if (recorder) endRecording();
         if (playing && follow) pause('Microphone disconnected. Check the USB cable, then reconnect.');
         else status('Microphone disconnected. Check the USB cable, then reconnect.');
       } else if (type === 'devices') fillDevices();
       else if (type === 'calibrated') showThreshold();
     }) : () => {};
     q('[data-p-connect]').onclick = () => connectMic(q('[data-p-device]').value);
-    q('[data-p-disconnect]').onclick = () => { if (audio && audio.level.connected) { audio.disconnect(); micUi(); status('Microphone disconnected.'); } };
+    q('[data-p-disconnect]').onclick = async () => { if (recorder) await endRecording(); if (audio && audio.level.connected) { audio.disconnect(); micUi(); status('Microphone disconnected.'); } };
     q('[data-p-device]').onchange = event => { if (audio && audio.level.connected) connectMic(event.target.value); else if (audio) audio.prefs.deviceId = event.target.value; };
     q('[data-p-calibrate]').onclick = async () => {
       if (playing) pause();
@@ -627,6 +655,95 @@
       if (follow && !(audio && audio.level.connected)) connectMic(q('[data-p-device]').value);
       else status(follow ? 'Follow my voice is on. The script moves while you speak and waits while you pause.' : 'Follow my voice is off. The script scrolls at a steady speed.');
     };
+
+    // ---- Backup recording to a folder ----
+    let folder = null, recorder = null;
+    const stamp = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return { day: `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`, time: `${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}` }; };
+    function takeFileName(take) {
+      const { day, time } = stamp();
+      const id = (script && script.piece && script.piece !== 'DEMO' ? script.piece : 'TP').replace(/[^A-Za-z0-9-]/g, '');
+      return `${id}_${day}_take${String(take.take).padStart(2, '0')}_${time}.wav`;
+    }
+    function recUi() {
+      q('[data-p-rec-on]').checked = recOn;
+      q('[data-p-folder]').hidden = !canPickFolder;
+      q('[data-p-folder]').textContent = folder ? 'Change folder…' : 'Choose folder…';
+      q('[data-p-folder-name]').textContent = canPickFolder ? (folder ? folder.name : 'No folder chosen') : '';
+      q('[data-p-rec-note]').textContent = canPickFolder
+        ? 'Saves a 24-bit WAV of the mic feed for every take, plus the take log. The H2 still keeps its own recording.'
+        : 'This browser can’t write to a folder, so each take downloads as a WAV when it ends. Use Chrome to save straight to a folder.';
+      q('[data-p-rec]').hidden = !recorder;
+      if (!recorder) q('[data-p-rec]').textContent = '';
+    }
+    async function pickFolder() {
+      try { folder = await window.showDirectoryPicker({ id: 'program-takes', mode: 'readwrite' }); saveFolder(folder); recUi(); return true; }
+      catch { return false; }
+    }
+    function fileTarget(writable) {
+      return { write: bytes => writable.write(bytes), async finish(header) { await writable.write({ type: 'write', position: 0, data: header }); await writable.close(); } };
+    }
+    function downloadTarget(name) {
+      const chunks = [];
+      return {
+        async write(bytes) { chunks.push(bytes); },
+        async finish(header) {
+          chunks[0] = header;
+          const url = URL.createObjectURL(new Blob(chunks, { type: 'audio/wav' }));
+          const a = document.createElement('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+        },
+      };
+    }
+    async function writeLogToFolder() {
+      if (!folder) return;
+      try { const w = await (await folder.getFileHandle(takeLogName(), { create: true })).createWritable(); await w.write(takeLogText()); await w.close(); } catch {}
+    }
+    async function beginRecording(take) {
+      const name = takeFileName(take);
+      try {
+        // Folder permission first, while the Start press still counts as a user action.
+        if (canPickFolder && !folder && !(await pickFolder())) throw new Error('no folder chosen');
+        if (folder && (await folder.queryPermission({ mode: 'readwrite' })) !== 'granted' && (await folder.requestPermission({ mode: 'readwrite' })) !== 'granted') throw new Error('folder access wasn’t allowed');
+        if (!(audio && audio.level.connected)) await connectMic(q('[data-p-device]').value);
+        if (!(audio && audio.level.connected)) throw new Error('the microphone isn’t connected');
+        const target = folder ? fileTarget(await (await folder.getFileHandle(name, { create: true })).createWritable()) : downloadTarget(name);
+        if (take !== currentTake) { await target.finish(new Uint8Array(44)).catch(() => {}); return; }
+        recorder = await audio.startRecording(target);
+        recorder.take = take;
+        take.file = folder ? `${folder.name}/${name}` : `Downloads/${name}`;
+        saveTakes();
+        recUi();
+      } catch (error) {
+        recorder = null;
+        recUi();
+        status(`Not recording a backup: ${error.message}.`);
+      }
+    }
+    async function endRecording() {
+      const r = recorder;
+      recorder = null;
+      recUi();
+      if (!r) return;
+      try {
+        const result = await r.stop();
+        status(`Saved take ${r.take.take} backup · ${formatTime(result.seconds)} · ${r.take.file}`);
+      } catch (error) {
+        status(`The backup for take ${r.take.take} couldn’t be saved (${error.message}). The H2 still has its recording.`);
+      }
+      closeTake();
+      writeLogToFolder();
+    }
+    q('[data-p-rec-on]').onchange = async event => {
+      recOn = event.target.checked;
+      persist();
+      if (recOn && canPickFolder && !folder) await pickFolder();
+      if (!recOn && recorder) await endRecording();
+      else if (recOn && playing && currentTake && !recorder) beginRecording(currentTake);
+      recUi();
+    };
+    q('[data-p-folder]').onclick = () => pickFolder();
+    loadFolder().then(handle => { if (handle && !folder) { folder = handle; recUi(); } });
+    const recTimer = setInterval(() => { if (recorder) q('[data-p-rec]').textContent = `REC ${formatTime(recorder.seconds)}`; }, 500);
 
     // ---- Editor + controls ----
     input.oninput = () => {
@@ -684,7 +801,7 @@
     q('[data-p-restart]').onclick = restart;
     q('[data-p-mark]').onclick = mark;
     q('[data-p-takes]').onclick = downloadTakes;
-    q('[data-p-edit]').onclick = () => { pause(); setFocus(false); reader.hidden = true; editor.hidden = false; q('[data-p-focus]').hidden = true; input.focus(); };
+    q('[data-p-edit]').onclick = () => { pause(); if (recorder) endRecording(); setFocus(false); reader.hidden = true; editor.hidden = false; q('[data-p-focus]').hidden = true; input.focus(); };
     q('[data-p-close]').onclick = () => dialog.close();
     const drawer = q('.prompter-drawer');
     function setDrawer(open) { drawer.hidden = !open; q('[data-p-settings]').setAttribute('aria-expanded', String(open)); q('[data-p-settings]').classList.toggle('active', open); measure(); if (!playing) syncCues(); }
@@ -714,13 +831,15 @@
       pause();
       stopRecognition();
       offAudio();
-      if (audio) audio.disconnect(true);
+      clearInterval(recTimer);
+      endRecording().finally(() => { if (audio) audio.disconnect(true); });
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('resize', onResize);
       dialog.remove();
     }, { once: true });
     showThreshold();
     micUi();
+    recUi();
     fillDevices();
     settings();
     modeLabel();
