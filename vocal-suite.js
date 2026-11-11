@@ -63,13 +63,13 @@
         const highs = chs.map(x => filtfilt(x, coeffs('hp', P.deFreq * 0.75, fs, 0.707)));
         const atk = coef(0.5, fs), rel = coef(60, fs), gAtk = coef(1, fs), gRel = coef(45, fs);
         let eS = 0, eF = 0, gr = 0, wasActive = false;
-        const thr = P.deThreshold, range = P.deRange;
+        const thr = P.deThreshold, range = P.deRange, gate = Math.pow(10, (stats.inLufs - 24) / 20); // ignore room tone, relative to this file's level
         for (let i = 0; i < n; i++) {
           const s = Math.abs(det[i]), f = Math.abs(mono[i]);
           eS = s > eS ? atk * eS + (1 - atk) * s : rel * eS + (1 - rel) * s;
           eF = f > eF ? atk * eF + (1 - atk) * f : rel * eF + (1 - rel) * f;
           let target = 0;
-          if (eF > 0.0015) { const over = db(eS / (eF + 1e-9)) - thr; if (over > 0) target = Math.min(range, over * 2); }
+          if (eF > gate) { const over = db(eS / (eF + 1e-9)) - thr; if (over > 0) target = Math.min(range, over * 2); }
           gr = target > gr ? gAtk * gr + (1 - gAtk) * target : gRel * gr + (1 - gRel) * target;
           const cut = 1 - Math.pow(10, -gr / 20);
           for (let c = 0; c < chs.length; c++) { const r = cut * highs[c][i]; chs[c][i] -= r; if (c === 0) removed[i] = r; }
@@ -103,7 +103,9 @@
         }
       }
       // 5. Loudness to target, then 6. peak limiter (look-ahead style two-pass gain smoothing)
-      const now = loudness(chs, fs), gain = Math.pow(10, (P.target - now) / 20);
+      // Prep mode only raises (or lowers) the level so peaks sit at −3 dB: nothing else changes.
+      const now = loudness(chs, fs), gain = P.normalize === 'peak' ? Math.pow(10, -3 / 20) / Math.max(peak(chs), 1e-6) : Math.pow(10, (P.target - now) / 20);
+      stats.gain = 20 * Math.log10(gain);
       for (const ch of chs) for (let i = 0; i < n; i++) ch[i] *= gain;
       const ceil = Math.pow(10, (P.ceiling - 0.5) / 20), g = new Float32Array(n);
       for (let i = 0; i < n; i++) { let a = 0; for (const ch of chs) a = Math.max(a, Math.abs(ch[i])); g[i] = a > ceil ? ceil / a : 1; }
@@ -121,12 +123,13 @@
 
   // ---------- Presets ----------
   const PRESETS = {
+    prep: { name: 'Prep for Auphonic', hpOn: false, hpFreq: 60, deOn: false, deFreq: 6500, deThreshold: -14, deRange: 6, toneOn: false, mud: 0, presence: 0, air: 0, compOn: false, comp: 'gentle', normalize: 'peak', target: -18, ceiling: -1.5 },
     studio: { name: 'Studio voice', hpOn: true, hpFreq: 80, deOn: true, deFreq: 6500, deThreshold: -14, deRange: 8, toneOn: true, mud: 2, presence: 1.5, air: 2, compOn: true, comp: 'medium', target: -18, ceiling: -1.5 },
     adam: { name: 'Adam · strong esses', hpOn: true, hpFreq: 80, deOn: true, deFreq: 6000, deThreshold: -18, deRange: 12, toneOn: true, mud: 2, presence: 1, air: 0.5, compOn: true, comp: 'medium', target: -18, ceiling: -1.5 },
     light: { name: 'Light touch', hpOn: true, hpFreq: 70, deOn: true, deFreq: 7000, deThreshold: -10, deRange: 5, toneOn: false, mud: 0, presence: 0, air: 0, compOn: true, comp: 'gentle', target: -18, ceiling: -1.5 },
   };
   const KEY = 'program-vocal-suite-v1';
-  let params = { ...PRESETS.studio };
+  let params = { normalize: 'loudness', ...PRESETS.studio };
   try { Object.assign(params, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch {}
   const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(params)); } catch {} };
 
@@ -153,10 +156,10 @@
           <section><h3>${toggle('deOn', 'De-esser')}</h3>${range('deFreq', 'Frequency', 3500, 10000, 100, ' Hz')}${range('deThreshold', 'Sensitivity', -30, -4, 1, ' dB')}${range('deRange', 'Max reduction', 2, 18, 1, ' dB')}<div class="vs-gr"><span>Reduction</span><div><i data-vs-gr></i></div><output data-vs-grv>0 dB</output></div></section>
           <section><h3>${toggle('toneOn', 'Tone')}</h3>${range('mud', 'Mud cut (250 Hz)', 0, 6, 0.5, ' dB')}${range('presence', 'Presence (3.5 kHz)', -3, 4, 0.5, ' dB')}${range('air', 'Air (12 kHz)', -2, 4, 0.5, ' dB')}</section>
           <section><h3>${toggle('compOn', 'Compressor')}</h3><label class="vs-range">Amount ${sel('comp', [['gentle', 'Gentle'], ['medium', 'Medium'], ['strong', 'Strong']])}</label><h3 class="mt">${toggle('hpOn', 'Clean-up high-pass')}</h3>${range('hpFreq', 'Cut below', 40, 200, 5, ' Hz')}</section>
-          <section><h3>Finish</h3><label class="vs-range">Loudness ${sel('target', [[-16, '−16 LUFS (podcast)'], [-18, '−18 LUFS (house, provisional)'], [-19, '−19 LUFS'], [-23, '−23 LUFS (broadcast)']])}</label><label class="vs-range">Peak ceiling ${sel('ceiling', [[-1, '−1 dB'], [-1.5, '−1.5 dB'], [-2, '−2 dB']])}</label><dl class="vs-stats" data-vs-stats></dl></section>
+          <section><h3>Finish</h3><label class="vs-range">Level ${sel('normalize', [['loudness', 'Loudness target'], ['peak', 'Peaks to −3 dB (prep)']])}</label><label class="vs-range" data-vs-target>Loudness ${sel('target', [[-16, '−16 LUFS (podcast)'], [-18, '−18 LUFS (house, provisional)'], [-19, '−19 LUFS'], [-23, '−23 LUFS (broadcast)']])}</label><label class="vs-range">Peak ceiling ${sel('ceiling', [[-1, '−1 dB'], [-1.5, '−1.5 dB'], [-2, '−2 dB']])}</label><dl class="vs-stats" data-vs-stats></dl></section>
         </div>
         <div class="row mt"><button class="btn" data-vs-download>Download WAV ↓</button><button class="btn" data-vs-drive hidden>Save to Google Drive (02_Working)</button><button class="text-link" data-vs-new>Load a different file</button></div>
-        <p class="small muted mt">Auphonic’s de-esser lives inside Voice AutoEQ (automatic, no strength control). Use this suite when you want hands-on control, then send the result to Auphonic for leveling if you like.</p>
+        <p class="small muted mt"><b>Prep for Auphonic</b> only raises the level so 32-bit float recordings are comfortable to edit, then exports a 24-bit WAV. Turn on the de-esser too if the esses need taming. Leave compression, EQ and loudness to Auphonic (Adaptive Leveler, Voice AutoEQ, loudness target). Auphonic’s own de-esser lives inside Voice AutoEQ and is automatic.</p>
       </div></div></section>`;
   }
 
@@ -272,7 +275,7 @@
   function showStats() {
     if (!stats) return;
     const f = v => (v <= -69 ? '—' : v.toFixed(1));
-    $v('[data-vs-stats]').innerHTML = `<dt>In</dt><dd>${f(stats.inLufs)} LUFS · peak ${f(stats.inPeak)} dB</dd><dt>Out</dt><dd>${f(stats.outLufs)} LUFS · peak ${f(stats.outPeak)} dB</dd><dt>Esses</dt><dd>${stats.essEvents} tamed · up to −${stats.maxGr.toFixed(1)} dB</dd>`;
+    $v('[data-vs-stats]').innerHTML = `<dt>In</dt><dd>${f(stats.inLufs)} LUFS · peak ${f(stats.inPeak)} dB</dd><dt>Out</dt><dd>${f(stats.outLufs)} LUFS · peak ${f(stats.outPeak)} dB</dd><dt>Gain</dt><dd>${stats.gain >= 0 ? '+' : ''}${stats.gain.toFixed(1)} dB</dd>${params.deOn ? `<dt>Esses</dt><dd>${stats.essEvents} tamed · up to −${stats.maxGr.toFixed(1)} dB</dd>` : ''}`;
   }
   function showBusy() { const b = $v('[data-vs-busy]'); if (b) b.hidden = !busy; }
 
@@ -287,7 +290,7 @@
     for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) { const x = Math.max(-1, Math.min(1, chans[c][i])), q = Math.round(x < 0 ? x * 8388608 : x * 8388607); data[o++] = q & 255; data[o++] = (q >> 8) & 255; data[o++] = (q >> 16) & 255; }
     return new Blob([data], { type: 'audio/wav' });
   }
-  const outName = () => (file ? file.name.replace(/\.[^.]+$/, '') : 'vocal') + '_vocal-suite.wav';
+  const outName = () => (file ? file.name.replace(/\.[^.]+$/, '') : 'vocal') + (params.preset === 'prep' ? '_prep.wav' : '_vocal-suite.wav');
 
   // ---------- Wiring ----------
   function setParam(name, raw) {
@@ -300,8 +303,9 @@
     params[name] = value; params.preset = 'custom';
     const presetSel = $v('[data-v="preset"]'); if (presetSel) presetSel.value = 'custom';
     const out = $v(`[data-out="${name}"]`); if (out) out.textContent = value + out.dataset.unit;
-    keep(); schedule();
+    keep(); schedule(); syncFinish();
   }
+  function syncFinish() { const t = $v('[data-vs-target]'); if (t) t.hidden = params.normalize === 'peak'; }
   function reRender() {
     const old = document.querySelector('.vocal-suite');
     if (!old) return;
@@ -309,6 +313,7 @@
     const fresh = wrap.firstElementChild;
     if (original) { fresh.querySelector('.vs-load').hidden = true; fresh.querySelector('.vs-work').hidden = false; }
     old.replaceWith(fresh);
+    syncFinish();
     if (original) { $v('[data-vs-name]').textContent = file.name; $v('[data-vs-dur]').textContent = fmt(original.duration); $v('[data-vs-drive]').hidden = !(window.HubDrive && HubDrive.connected()); drawWave(); showStats(); ui(); }
   }
   document.addEventListener('input', e => { const el = e.target.closest('.vocal-suite [data-v]'); if (el) setParam(el.dataset.v, el.value); });
@@ -347,6 +352,7 @@
     if (!headEl || main.querySelector('.vocal-suite')) return;
     const wrap = document.createElement('div'); wrap.innerHTML = panel();
     headEl.after(wrap.firstElementChild);
+    syncFinish();
     if (original) reRender();
   };
   window.addEventListener('resize', () => { if (original && document.querySelector('.vocal-suite')) drawWave(); });
