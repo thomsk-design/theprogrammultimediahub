@@ -50,7 +50,16 @@
 
     return function process(input, fs, P) {
       let chs = input.map(c => Float32Array.from(c));
-      const n = chs[0].length, stats = { inLufs: loudness(chs, fs), inPeak: db(peak(chs)) };
+      // Channels: dual mono blends left and right into one voice (as Final Cut does); left/right keeps one side.
+      // The voice is processed once and written to both sides at the end.
+      const single = chs.length > 1 && P.channels && P.channels !== 'stereo';
+      if (single) {
+        if (P.channels === 'left') chs = [chs[0]];
+        else if (P.channels === 'right') chs = [chs[1]];
+        else { const m = chs[0], k = chs.length; for (let c = 1; c < k; c++) { const x = chs[c]; for (let i = 0; i < m.length; i++) m[i] += x[i]; } for (let i = 0; i < m.length; i++) m[i] /= k; chs = [m]; }
+      }
+      const dup = single ? 3.01 : 0, lufs = c => loudness(c, fs) + dup; // one voice written to two sides measures 3 dB louder
+      const n = chs[0].length, stats = { inLufs: lufs(chs), inPeak: db(peak(chs)) };
       // 1. Clean-up high-pass
       if (P.hpOn) chs = chs.map(x => filter(filter(x, coeffs('hp', P.hpFreq, fs, 0.707)), coeffs('hp', P.hpFreq, fs, 0.707)));
       // 2. Split-band de-esser: detect sibilance relative to the whole voice; reduce only the highs.
@@ -63,7 +72,7 @@
         const highs = chs.map(x => filtfilt(x, coeffs('hp', P.deFreq * 0.75, fs, 0.707)));
         const atk = coef(0.5, fs), rel = coef(60, fs), gAtk = coef(1, fs), gRel = coef(45, fs);
         let eS = 0, eF = 0, gr = 0, wasActive = false;
-        const thr = P.deThreshold, range = P.deRange, gate = Math.pow(10, (stats.inLufs - 24) / 20); // ignore room tone, relative to this file's level
+        const thr = P.deThreshold, range = P.deRange, gate = Math.pow(10, (stats.inLufs - dup - 24) / 20); // ignore room tone, relative to this file's level
         for (let i = 0; i < n; i++) {
           const s = Math.abs(det[i]), f = Math.abs(mono[i]);
           eS = s > eS ? atk * eS + (1 - atk) * s : rel * eS + (1 - rel) * s;
@@ -79,9 +88,9 @@
         }
       }
       stats.maxGr = maxGr; stats.essEvents = essEvents;
-      // 3. Tone: mud cut, presence, air
+      // 3. Tone: depth (low shelf), mid cut, mud cut, presence, air
       if (P.toneOn) {
-        const eq = [['peak', 250, 1.0, -P.mud], ['peak', 3500, 0.9, P.presence], ['hshelf', 12000, 0.707, P.air]].filter(e => e[3]);
+        const eq = [['lshelf', 150, 0.707, P.low || 0], ['peak', 800, 0.6, -(P.mid || 0)], ['peak', 250, 1.0, -P.mud], ['peak', 3500, 0.9, P.presence], ['hshelf', 12000, 0.707, P.air]].filter(e => e[3]);
         chs = chs.map(x => eq.reduce((y, e) => filter(y, coeffs(e[0], e[1], fs, e[2], e[3])), x));
       }
       // 4. Compressor: RMS detector, threshold set relative to the voice's own average loudness,
@@ -104,7 +113,7 @@
       }
       // 5. Loudness to target, then 6. peak limiter (look-ahead style two-pass gain smoothing)
       // Prep mode only raises (or lowers) the level so peaks sit at −3 dB: nothing else changes.
-      const now = loudness(chs, fs), gain = P.normalize === 'peak' ? Math.pow(10, -3 / 20) / Math.max(peak(chs), 1e-6) : Math.pow(10, (P.target - now) / 20);
+      const now = lufs(chs), gain = P.normalize === 'peak' ? Math.pow(10, -3 / 20) / Math.max(peak(chs), 1e-6) : Math.pow(10, (P.target - now) / 20);
       stats.gain = 20 * Math.log10(gain);
       for (const ch of chs) for (let i = 0; i < n; i++) ch[i] *= gain;
       const ceil = Math.pow(10, (P.ceiling - 0.5) / 20), g = new Float32Array(n);
@@ -113,7 +122,8 @@
       for (let i = 1; i < n; i++) g[i] = Math.min(g[i], g[i - 1] + relStep);
       for (let i = n - 2; i >= 0; i--) g[i] = Math.min(g[i], g[i + 1] + atkStep);
       for (const ch of chs) for (let i = 0; i < n; i++) ch[i] *= g[i];
-      stats.outLufs = loudness(chs, fs); stats.outPeak = db(peak(chs));
+      stats.outLufs = lufs(chs); stats.outPeak = db(peak(chs));
+      if (single) chs = [chs[0], chs[0].slice()];
       return { chs, removed, grTrace, stats };
     };
   }
@@ -123,13 +133,15 @@
 
   // ---------- Presets ----------
   const PRESETS = {
-    prep: { name: 'Prep for Auphonic', hpOn: false, hpFreq: 60, deOn: false, deFreq: 6500, deThreshold: -14, deRange: 6, toneOn: false, mud: 0, presence: 0, air: 0, compOn: false, comp: 'gentle', normalize: 'peak', target: -18, ceiling: -1.5 },
+    prep: { name: 'Prep for Auphonic', channels: 'dual', hpOn: false, hpFreq: 60, deOn: false, deFreq: 6500, deThreshold: -14, deRange: 6, toneOn: false, mud: 0, presence: 0, air: 0, compOn: false, comp: 'gentle', normalize: 'peak', target: -18, ceiling: -1.5 },
     studio: { name: 'Studio voice', hpOn: true, hpFreq: 80, deOn: true, deFreq: 6500, deThreshold: -14, deRange: 8, toneOn: true, mud: 2, presence: 1.5, air: 2, compOn: true, comp: 'medium', target: -18, ceiling: -1.5 },
-    adam: { name: 'Adam · strong esses', hpOn: true, hpFreq: 80, deOn: true, deFreq: 6000, deThreshold: -18, deRange: 12, toneOn: true, mud: 2, presence: 1, air: 0.5, compOn: true, comp: 'medium', target: -18, ceiling: -1.5 },
+    adamFinal: { name: 'Adam · final (after Auphonic)', hpOn: false, hpFreq: 80, deOn: true, deFreq: 4500, deThreshold: -6, deRange: 3, toneOn: true, low: 3, mid: 3, mud: 0, presence: 0, air: 0, compOn: false, comp: 'gentle', target: -16, ceiling: -1 },
+    adam: { name: 'Adam · strong esses (no Auphonic)', hpOn: true, hpFreq: 80, deOn: true, deFreq: 4500, deThreshold: -18, deRange: 12, toneOn: true, mud: 2, presence: 1, air: 0.5, compOn: true, comp: 'medium', target: -18, ceiling: -1.5 },
     light: { name: 'Light touch', hpOn: true, hpFreq: 70, deOn: true, deFreq: 7000, deThreshold: -10, deRange: 5, toneOn: false, mud: 0, presence: 0, air: 0, compOn: true, comp: 'gentle', target: -18, ceiling: -1.5 },
   };
   const KEY = 'program-vocal-suite-v1';
-  let params = { normalize: 'loudness', ...PRESETS.studio };
+  const BASE = { normalize: 'loudness', channels: 'stereo', low: 0, mid: 0 };
+  let params = { ...BASE, ...PRESETS.studio };
   try { Object.assign(params, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch {}
   const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(params)); } catch {} };
 
@@ -152,14 +164,14 @@
         <canvas class="vs-wave" data-vs-wave height="120"></canvas>
         <p class="small muted vs-legend"><span class="vs-key"></span> Ess reduction · click the waveform to jump</p>
         <div class="vs-grid">
-          <section><h3>Preset</h3>${sel('preset', Object.entries(PRESETS).map(([k, v]) => [k, v.name]).concat([['custom', 'Custom']]))}<p class="small muted">Changes are remembered on this computer.</p></section>
+          <section><h3>Preset</h3>${sel('preset', Object.entries(PRESETS).map(([k, v]) => [k, v.name]).concat([['custom', 'Custom']]))}<p class="small muted">Changes are remembered on this computer.</p><h3 class="mt">Channels</h3>${sel('channels', [['stereo', 'As recorded'], ['dual', 'Dual mono (blend left + right)'], ['left', 'Left only'], ['right', 'Right only']])}</section>
           <section><h3>${toggle('deOn', 'De-esser')}</h3>${range('deFreq', 'Frequency', 3500, 10000, 100, ' Hz')}${range('deThreshold', 'Sensitivity', -30, -4, 1, ' dB')}${range('deRange', 'Max reduction', 2, 18, 1, ' dB')}<div class="vs-gr"><span>Reduction</span><div><i data-vs-gr></i></div><output data-vs-grv>0 dB</output></div></section>
-          <section><h3>${toggle('toneOn', 'Tone')}</h3>${range('mud', 'Mud cut (250 Hz)', 0, 6, 0.5, ' dB')}${range('presence', 'Presence (3.5 kHz)', -3, 4, 0.5, ' dB')}${range('air', 'Air (12 kHz)', -2, 4, 0.5, ' dB')}</section>
+          <section><h3>${toggle('toneOn', 'Tone')}</h3>${range('low', 'Depth (150 Hz shelf)', 0, 6, 0.5, ' dB')}${range('mid', 'Mid cut (800 Hz)', 0, 6, 0.5, ' dB')}${range('mud', 'Mud cut (250 Hz)', 0, 6, 0.5, ' dB')}${range('presence', 'Presence (3.5 kHz)', -3, 4, 0.5, ' dB')}${range('air', 'Air (12 kHz)', -2, 4, 0.5, ' dB')}</section>
           <section><h3>${toggle('compOn', 'Compressor')}</h3><label class="vs-range">Amount ${sel('comp', [['gentle', 'Gentle'], ['medium', 'Medium'], ['strong', 'Strong']])}</label><h3 class="mt">${toggle('hpOn', 'Clean-up high-pass')}</h3>${range('hpFreq', 'Cut below', 40, 200, 5, ' Hz')}</section>
           <section><h3>Finish</h3><label class="vs-range">Level ${sel('normalize', [['loudness', 'Loudness target'], ['peak', 'Peaks to −3 dB (prep)']])}</label><label class="vs-range" data-vs-target>Loudness ${sel('target', [[-16, '−16 LUFS (podcast)'], [-18, '−18 LUFS (house, provisional)'], [-19, '−19 LUFS'], [-23, '−23 LUFS (broadcast)']])}</label><label class="vs-range">Peak ceiling ${sel('ceiling', [[-1, '−1 dB'], [-1.5, '−1.5 dB'], [-2, '−2 dB']])}</label><dl class="vs-stats" data-vs-stats></dl></section>
         </div>
         <div class="row mt"><button class="btn" data-vs-download>Download WAV ↓</button><button class="btn" data-vs-drive hidden>Save to Google Drive (02_Working)</button><button class="text-link" data-vs-new>Load a different file</button></div>
-        <p class="small muted mt"><b>Prep for Auphonic</b> only raises the level so 32-bit float recordings are comfortable to edit, then exports a 24-bit WAV. Turn on the de-esser too if the esses need taming. Leave compression, EQ and loudness to Auphonic (Adaptive Leveler, Voice AutoEQ, loudness target). Auphonic’s own de-esser lives inside Voice AutoEQ and is automatic.</p>
+        <p class="small muted mt"><b>Adam’s process:</b> 1. Load the raw recording, choose <b>Prep for Auphonic</b> (dual mono, level raised, nothing else) and download the WAV. 2. Run it through Auphonic: Voice Cleaner (remove breaths), Leveler 100%, Soft compressor, −16 LUFS, WAV out. 3. Load the Auphonic file here, choose <b>Adam · final</b> and save it. Tone and de-essing come after Auphonic so nothing undoes them.</p>
       </div></div></section>`;
   }
 
@@ -297,7 +309,7 @@
     const el = $v(`[data-v="${name}"]`);
     let value = el.type === 'checkbox' ? el.checked : el.type === 'range' || /^-?\d/.test(raw) ? Number(raw) : raw;
     if (name === 'preset') {
-      if (PRESETS[raw]) { params = { ...PRESETS[raw], preset: raw }; keep(); reRender(); schedule(); }
+      if (PRESETS[raw]) { params = { ...BASE, channels: params.channels || 'stereo', ...PRESETS[raw], preset: raw }; keep(); reRender(); schedule(); }
       return;
     }
     params[name] = value; params.preset = 'custom';
