@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="robots" content="noindex,nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Prompter">
+<meta name="theme-color" content="#000000">
+<title>Video Prompter · The Program</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/prompter.css">
+</head>
+<body>
+<section id="setup" class="setup">
+  <header class="setup-head">
+    <div><a class="brand" href="/">The Program<span>.</span></a><h1>Video prompter</h1></div>
+    <p class="muted">Runs on its own at Adam’s measured pace. Mirrored for teleprompter glass.</p>
+  </header>
+
+  <div class="setup-grid">
+    <div class="card script-card">
+      <label for="script">Script</label>
+      <textarea id="script" spellcheck="true" placeholder="Paste the script here.&#10;&#10;Add a pause anywhere with [Pause 5] or [Silence: 30 seconds]. [Breath] holds about a second."></textarea>
+      <div class="row">
+        <span class="muted small" id="saved">Saved on this iPad.</span>
+        <span class="estimate" id="estimate">—</span>
+      </div>
+      <div class="insert">
+        <span class="small muted">Insert a pause at the cursor:</span>
+        <button data-ins="[Breath]">Breath</button>
+        <button data-ins="[Pause 3]">3 s</button>
+        <button data-ins="[Pause 5]">5 s</button>
+        <button data-ins="[Pause 10]">10 s</button>
+        <button data-ins="[Pause 30]">30 s</button>
+        <button data-ins="[Pause 60]">60 s</button>
+      </div>
+    </div>
+
+    <div class="card settings">
+      <h2>Settings</h2>
+      <label class="toggle"><input type="checkbox" id="mirror" checked><span>Mirror text for the glass</span></label>
+      <label class="toggle"><input type="checkbox" id="sync" checked><span>Keep in step with Adam’s voice <small>Listens through the iPad microphone and lines up with him at the end of each sentence. Nothing is recorded.</small></span></label>
+      <label>Pace <output id="paceOut">100%</output>
+        <input type="range" id="pace" min="80" max="120" step="1" value="100">
+        <small class="muted">100% is Adam’s measured pace (about 134 words a minute). Set it before the take; nobody needs to touch it during.</small>
+      </label>
+      <label>Text size <output id="sizeOut">56 px</output><input type="range" id="size" min="36" max="96" step="2" value="56"></label>
+      <label>Reading line <output id="lineOut">35% from top</output>
+        <input type="range" id="line" min="15" max="60" step="1" value="35">
+        <small class="muted">Line it up with the camera lens behind the glass.</small>
+      </label>
+      <label>Countdown before start <output id="cdOut">5 s</output><input type="range" id="countdown" min="3" max="15" step="1" value="5"></label>
+      <button class="primary" id="go">Open prompter</button>
+      <p class="small muted tips">On the iPad: in Safari tap Share → <b>Add to Home Screen</b> so the prompter opens full screen. Keep the iPad plugged in; the screen stays awake while the prompter runs.</p>
+    </div>
+  </div>
+</section>
+
+<section id="stage" class="stage" hidden>
+  <div id="flip" class="flip">
+    <div id="viewport" class="viewport"><div id="text" class="text"></div></div>
+    <div id="guide" class="guide" aria-hidden="true"></div>
+    <div id="cue" class="cue" hidden><div class="cue-num" id="cueNum"></div><div class="cue-label" id="cueLabel">Hold</div><div class="cue-bar"><i id="cueBar"></i></div></div>
+    <div id="count" class="count" hidden></div>
+    <div id="state" class="state"></div>
+  </div>
+  <div id="hint" class="hint">Tap to start · tap again to pause · two-finger tap or Esc to go back</div>
+</section>
+
+<script src="/prompter.js"></script>
+</body>
+</html>
