@@ -28,7 +28,7 @@ textarea:focus{outline:2px solid var(--gold);outline-offset:1px}
 .tips{margin:14px 0 0}
 
 /* Stage */
-.stage{position:fixed;inset:0;background:#000;overflow:hidden;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+.stage{position:fixed;inset:0;background:#000;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
 .flip{position:absolute;inset:0}
 .flip.mirrored{transform:scaleX(-1)}
 .viewport{position:absolute;inset:0;overflow:hidden}
@@ -52,9 +52,11 @@ textarea:focus{outline:2px solid var(--gold);outline-offset:1px}
 .state{position:absolute;right:18px;bottom:14px;font-size:14px;color:#777}
 .controls{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);display:flex;gap:10px;padding:10px;background:rgba(28,26,23,.92);border:1px solid #3a352d;border-radius:18px;transition:opacity .5s;z-index:5}
 .controls.hide{opacity:0;pointer-events:none}
-.controls button{min-height:58px;padding:0 22px;border-radius:12px;border:1px solid #4a443a;background:#2a2620;color:#f2efe8;font-size:18px;font-weight:600;white-space:nowrap}
+.controls button{min-height:58px;padding:0 18px;border-radius:12px;border:1px solid #4a443a;background:#2a2620;color:#f2efe8;font-size:18px;font-weight:600;white-space:nowrap}
 .controls button span{margin-right:6px}
-.controls .play{background:var(--gold);color:#1c1a17;border-color:var(--gold);min-width:150px}
+.controls .play{background:var(--gold);color:#1c1a17;border-color:var(--gold);min-width:170px}
+.stage.cueing .text{transition:transform .35s ease}
+.stage:not(.running){cursor:grab}
 .controls .stop{background:#5a1f1f;border-color:#7a2b2b}
 .controls button:disabled{background:#24211c;color:#6d675d;border-color:#36312a}
 .state{bottom:auto;top:14px}
