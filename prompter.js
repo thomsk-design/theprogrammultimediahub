@@ -487,8 +487,16 @@
   }
   if (lib.length) {
     const box = $('library');
-    box.innerHTML = '<div class="lib-head">Program scripts</div>';
+    box.innerHTML = '';
+    let group = null;
     for (const sc of lib) {
+      if (sc.group !== group) {
+        group = sc.group;
+        const h = document.createElement('div');
+        h.className = 'lib-head';
+        h.textContent = group || 'Program scripts';
+        box.append(h);
+      }
       const b = document.createElement('button');
       b.type = 'button'; b.dataset.id = sc.id;
       b.innerHTML = `${sc.title}<small>${sc.sub}${sc.updated ? ' · ' + sc.updated : ''}</small>`;
