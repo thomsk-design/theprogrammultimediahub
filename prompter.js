@@ -210,7 +210,7 @@
     run = { i: 0, phase: 'idle', t: 0, y: targetY(0, 0), vy: 0, paused: false };
     setY(run.y); paint(-1);
     state('Ready');
-    $('hint').textContent = 'Tap to start · tap again to pause · two-finger tap or Esc to go back';
+    controls();
   }
   function close() {
     cancelAnimationFrame(frame);
@@ -235,21 +235,65 @@
     $('count').hidden = false;
     loop.last = null;
     frame = requestAnimationFrame(loop);
+    controls();
   }
-  function togglePause() {
+  const running = () => run && !run.paused && run.phase !== 'idle' && run.phase !== 'done';
+  // Start: from the top (with countdown), or carry on from where it stopped.
+  function play() {
     if (!run) return;
-    if (run.phase === 'idle') return start();
-    if (run.phase === 'done') return close();
-    run.paused = !run.paused;
-    stage.classList.toggle('running', !run.paused);
-    state(run.paused ? 'Paused · tap to carry on' : (mic.on ? 'In step with Adam' : 'Running'));
+    if (run.phase === 'done') { backToTop(); return start(); }
+    if (run.phase === 'idle') return start().then(controls);
+    if (!run.paused) return;
+    run.paused = false;
+    stage.classList.add('running');
+    state(mic.on ? 'In step with Adam' : 'Running at Adam’s pace');
+    requestWake();
     loop.last = null;
-    if (!run.paused) frame = requestAnimationFrame(loop);
+    frame = requestAnimationFrame(loop);
+    controls();
+  }
+  // Stop: holds exactly where it is. A stop during the countdown goes back to the top.
+  function stop() {
+    if (!run || run.phase === 'idle' || run.phase === 'done' || run.paused) return;
+    if (run.phase === 'count') return backToTop();
+    run.paused = true;
+    cancelAnimationFrame(frame);
+    stage.classList.remove('running');
+    state('Stopped · Start carries on from here');
+    controls();
+  }
+  function backToTop() {
+    if (!run) return;
+    cancelAnimationFrame(frame);
+    $('cue').hidden = true; $('count').hidden = true;
+    run = { i: 0, phase: 'idle', t: 0, y: targetY(0, 0), vy: 0, paused: false };
+    setY(run.y); paint(-1);
+    stage.classList.remove('running');
+    releaseWake();
+    state('Ready · back at the top');
+    controls();
+  }
+  // Control bar: always shown when stopped; fades out while running so it stays out of the talent's view.
+  let hideTimer;
+  function controls(reveal) {
+    if (!run) return;
+    const playing = running();
+    const label = run.phase === 'idle' ? 'Start' : run.phase === 'done' ? 'Start again' : run.paused ? 'Start' : 'Running';
+    $('cPlay').querySelector('b').textContent = label;
+    $('cPlay').disabled = playing;
+    $('cStop').disabled = !playing;
+    $('cTop').disabled = run.phase === 'idle';
+    const bar = $('controls');
+    clearTimeout(hideTimer);
+    if (playing) {
+      bar.classList.toggle('hide', !reveal);
+      if (reveal) hideTimer = setTimeout(() => bar.classList.add('hide'), 3000);
+    } else bar.classList.remove('hide');
   }
 
   function enter(i) {
     run.i = i;
-    if (i >= tl.events.length) { run.phase = 'done'; paint(tl.events.length); $('cue').hidden = true; state('End of script · tap to go back'); stopMic(); releaseWake(); stage.classList.remove('running'); return; }
+    if (i >= tl.events.length) { run.phase = 'done'; paint(tl.events.length); $('cue').hidden = true; state('End of script'); stopMic(); releaseWake(); stage.classList.remove('running'); controls(); return; }
     const e = tl.events[i];
     paint(i);
     if (e.k === 'cue') {
@@ -316,12 +360,17 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && run && run.phase !== 'idle' && run.phase !== 'done') requestWake(); });
 
   // ---------- input ----------
-  stage.addEventListener('touchstart', ev => { if (ev.touches.length >= 2) { ev.preventDefault(); close(); } }, { passive: false });
-  stage.addEventListener('click', togglePause);
+  // A tap anywhere brings the controls back while it runs; the buttons do the work.
+  stage.addEventListener('click', ev => { if (!ev.target.closest('#controls')) controls(true); });
+  $('cPlay').addEventListener('click', play);
+  $('cStop').addEventListener('click', stop);
+  $('cTop').addEventListener('click', backToTop);
+  $('cScript').addEventListener('click', close);
   document.addEventListener('keydown', ev => {
     if (stage.hidden) return;
     if (ev.key === 'Escape') close();
-    else if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); togglePause(); }
+    else if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); running() ? stop() : play(); }
+    else if (ev.key === 'Home' || ev.key === 'r' || ev.key === 'R') backToTop();
   });
   window.addEventListener('resize', () => { if (!stage.hidden && tl) { text.style.paddingTop = text.style.paddingBottom = `${stage.clientHeight}px`; layout(); } });
   $('go').addEventListener('click', open);

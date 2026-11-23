@@ -50,5 +50,11 @@ textarea:focus{outline:2px solid var(--gold);outline-offset:1px}
 .cue-bar i{display:block;height:100%;background:#000;width:100%}
 .count{position:absolute;inset:0;display:grid;place-items:center;font-size:30vh;font-weight:700;color:var(--gold);background:rgba(0,0,0,.55)}
 .state{position:absolute;right:18px;bottom:14px;font-size:14px;color:#777}
-.hint{position:absolute;left:0;right:0;bottom:14px;text-align:center;color:#666;font-size:14px;transition:opacity .6s}
-.stage.running .hint{opacity:0}
+.controls{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);display:flex;gap:10px;padding:10px;background:rgba(28,26,23,.92);border:1px solid #3a352d;border-radius:18px;transition:opacity .5s;z-index:5}
+.controls.hide{opacity:0;pointer-events:none}
+.controls button{min-height:58px;padding:0 22px;border-radius:12px;border:1px solid #4a443a;background:#2a2620;color:#f2efe8;font-size:18px;font-weight:600;white-space:nowrap}
+.controls button span{margin-right:6px}
+.controls .play{background:var(--gold);color:#1c1a17;border-color:var(--gold);min-width:150px}
+.controls .stop{background:#5a1f1f;border-color:#7a2b2b}
+.controls button:disabled{background:#24211c;color:#6d675d;border-color:#36312a}
+.state{bottom:auto;top:14px}
