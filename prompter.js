@@ -183,7 +183,6 @@
     }
     for (const L of lines) L.events.forEach((e, i) => { e.posInLine = i; });
     $('guide').style.top = `${ui.line.value}%`;
-    $('cue').style.top = `calc(${ui.line.value}% - 165px)`;
   }
   // Scroll target: the current line's centre sits on the reading line and drifts toward the next line as it is read.
   function targetY(i, frac) {
@@ -206,6 +205,11 @@
     });
   }
 
+  function placeCue() {
+    const box = $('cue'), H = stage.clientHeight, guide = H * Number(ui.line.value) / 100;
+    const h = box.offsetHeight || 300, line = Number(ui.size.value) * 1.4;
+    box.style.top = (guide - h - 24 >= 12) ? `${guide - h - 24}px` : `${Math.min(H - h - 100, guide + line * 2)}px`;
+  }
   function open() {
     if (!ui.script.value.trim()) { ui.script.focus(); return; }
     persist();
@@ -342,7 +346,10 @@
     paint(i);
     if (e.k === 'cue') {
       run.phase = 'cue'; run.t = 0;
+      $('cueNum').textContent = Math.ceil(e.item.secs);
+      $('cueBar').style.width = '100%';
       $('cue').hidden = false;
+      placeCue();
       $('cueLabel').textContent = e.item.kind === 'breath' ? 'Breathe' : 'Hold';
     } else { run.phase = 'word'; run.t = 0; }
   }
@@ -462,6 +469,38 @@
   ui.script.addEventListener('input', () => { clearTimeout(typing); typing = setTimeout(() => { persist(); labels(); }, 300); });
   for (const k of ['mirror', 'sync', 'pace', 'size', 'line', 'countdown']) ui[k].addEventListener('input', () => { persist(); labels(); });
   labels();
+
+  // ---------- Program scripts ----------
+  const lib = window.PROMPTER_SCRIPTS || [];
+  function markLoaded() {
+    for (const b of document.querySelectorAll('#library [data-id]')) b.classList.toggle('on', lib.find(x => x.id === b.dataset.id)?.text === ui.script.value);
+  }
+  function load(id) {
+    const sc = lib.find(x => x.id === id);
+    if (!sc) return;
+    const cur = ui.script.value.trim();
+    if (cur && cur !== sc.text && !lib.some(x => x.text === ui.script.value) && !confirm('Replace the script that’s in the box with ' + sc.title + '?')) return;
+    ui.script.value = sc.text;
+    persist(); labels(); markLoaded();
+    ui.script.scrollTop = 0;
+    $('saved').textContent = `${sc.title} loaded · script updated ${sc.updated}. Edits are saved on this iPad.`;
+  }
+  if (lib.length) {
+    const box = $('library');
+    box.innerHTML = '<div class="lib-head">Program scripts</div>';
+    for (const sc of lib) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.dataset.id = sc.id;
+      b.innerHTML = `${sc.title}<small>${sc.sub}${sc.updated ? ' · ' + sc.updated : ''}</small>`;
+      b.addEventListener('click', () => load(sc.id));
+      box.append(b);
+    }
+    markLoaded();
+    ui.script.addEventListener('input', markLoaded);
+    // A link such as /prompter?script=w2d1 opens with that script loaded.
+    const want = new URLSearchParams(location.search).get('script');
+    if (want) load(want.toLowerCase());
+  }
 
   // Exposed for testing the pace model against real recordings.
   window.PrompterModel = { parse, model, PACE };

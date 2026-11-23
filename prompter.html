@@ -23,6 +23,7 @@
 
   <div class="setup-grid">
     <div class="card script-card">
+      <div class="library" id="library" aria-label="Program scripts"></div>
       <label for="script">Script</label>
       <textarea id="script" spellcheck="true" placeholder="Paste the script here.&#10;&#10;Add a pause anywhere with [Pause 5] or [Silence: 30 seconds]. [Breath] holds about a second."></textarea>
       <div class="row">
@@ -64,7 +65,7 @@
   <div id="flip" class="flip">
     <div id="viewport" class="viewport"><div id="text" class="text"></div></div>
     <div id="guide" class="guide" aria-hidden="true"></div>
-    <div id="cue" class="cue" hidden><div class="cue-num" id="cueNum"></div><div class="cue-label" id="cueLabel">Hold</div><div class="cue-bar"><i id="cueBar"></i></div></div>
+    <div id="cue" class="cue" hidden><div class="cue-num" id="cueNum"></div><div class="cue-side"><div class="cue-label" id="cueLabel">Hold</div><div class="cue-bar"><i id="cueBar"></i></div></div></div>
     <div id="count" class="count" hidden></div>
     <div id="state" class="state"></div>
   </div>
@@ -78,6 +79,7 @@
   </div>
 </section>
 
+<script src="/prompter-scripts.js"></script>
 <script src="/prompter.js"></script>
 </body>
 </html>
