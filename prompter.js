@@ -152,7 +152,12 @@
       const el = document.createElement('p');
       if (p.gap) el.style.marginTop = '1.1em';
       for (const it of p.items) {
-        if (it.k === 't') { el.append(it.text); continue; }
+        if (it.k === 't') {
+          // Loose punctuation such as a stand-alone "…" dims along with the word before it.
+          if (/\S/.test(it.text) && ei > 0) { const p = document.createElement('span'); p.textContent = it.text; (tl.events[ei - 1].tail ||= []).push(p); el.append(p); }
+          else el.append(it.text);
+          continue;
+        }
         const span = document.createElement('span');
         span.className = it.k === 'w' ? 'w' : 'pz';
         span.textContent = it.text;
@@ -196,6 +201,7 @@
   function paint(i) {
     tl.events.forEach((e, j) => {
       e.el.classList.toggle('read', j < i);
+      if (e.tail) for (const p of e.tail) p.classList.toggle('read', j < i);
       e.el.classList.toggle('now', j === i);
     });
   }
@@ -262,27 +268,65 @@
     state('Stopped · Start carries on from here');
     controls();
   }
-  function backToTop() {
+  function backToTop() { cueAt(0); }
+  // Park the prompter on a line, stopped, ready for a pickup. Start then counts down and goes from here.
+  function cueAt(i) {
     if (!run) return;
     cancelAnimationFrame(frame);
     $('cue').hidden = true; $('count').hidden = true;
-    run = { i: 0, phase: 'idle', t: 0, y: targetY(0, 0), vy: 0, paused: false };
-    setY(run.y); paint(-1);
+    i = Math.max(0, Math.min(i, tl.events.length - 1));
+    run = { i, from: i, phase: 'idle', t: 0, y: targetY(i, 0), vy: 0, paused: false };
+    stage.classList.add('cueing');
+    setY(run.y);
+    setTimeout(() => stage.classList.remove('cueing'), 400);
+    if (i) paint(i); else paint(-1);
     stage.classList.remove('running');
     releaseWake();
-    state('Ready · back at the top');
+    state(i ? 'Ready · picks up from the highlighted line' : 'Ready · at the top');
     controls();
+  }
+  // Sentence starts: the places a pickup can begin.
+  function sentenceStarts() {
+    const ev = tl.events, out = [0];
+    for (let i = 1; i < ev.length; i++) {
+      const prev = ev[i - 1], e = ev[i];
+      if (e.k === 'cue') continue;
+      if (prev.k === 'cue' || (prev.k === 'w' && prev.item.sync) || e.el.parentNode !== prev.el.parentNode) out.push(i);
+    }
+    return out;
+  }
+  // Back / Forward a sentence. While running it keeps running from there; when stopped it parks there.
+  function jump(dir) {
+    if (!run) return;
+    const S = sentenceStarts();
+    const cur = run.phase === 'idle' ? (run.from || 0) : run.phase === 'done' ? tl.events.length : run.i;
+    let target;
+    if (dir < 0) {
+      const before = S.filter(s => s < cur);
+      // Partway through a sentence, Back goes to its start; at a start, it goes to the one before.
+      target = before.length ? before[before.length - 1] : 0;
+    } else {
+      target = S.find(s => s > cur);
+      if (target == null) return;
+    }
+    if (running() && run.phase !== 'count') {
+      $('cue').hidden = true;
+      enter(target);
+      controls(true);
+    } else cueAt(target);
   }
   // Control bar: always shown when stopped; fades out while running so it stays out of the talent's view.
   let hideTimer;
   function controls(reveal) {
     if (!run) return;
     const playing = running();
-    const label = run.phase === 'idle' ? 'Start' : run.phase === 'done' ? 'Start again' : run.paused ? 'Start' : 'Running';
+    const label = run.phase === 'idle' ? (run.from ? 'Start from here' : 'Start') : run.phase === 'done' ? 'Start again' : run.paused ? 'Start' : 'Running';
     $('cPlay').querySelector('b').textContent = label;
     $('cPlay').disabled = playing;
     $('cStop').disabled = !playing;
-    $('cTop').disabled = run.phase === 'idle';
+    $('cTop').disabled = run.phase === 'idle' && !run.from;
+    $('cBack').disabled = run.phase === 'idle' && !run.from;
+    $('cFwd').disabled = run.phase === 'done';
     const bar = $('controls');
     clearTimeout(hideTimer);
     if (playing) {
@@ -312,7 +356,7 @@
     if (run.phase === 'count') {
       run.t -= dt;
       $('count').textContent = Math.max(1, Math.ceil(run.t));
-      if (run.t <= 0) { $('count').hidden = true; enter(0); }
+      if (run.t <= 0) { $('count').hidden = true; enter(run.from || 0); }
     } else if (run.phase === 'word') {
       const e = tl.events[run.i];
       run.t += dt;
@@ -361,7 +405,39 @@
 
   // ---------- input ----------
   // A tap anywhere brings the controls back while it runs; the buttons do the work.
-  stage.addEventListener('click', ev => { if (!ev.target.closest('#controls')) controls(true); });
+  stage.addEventListener('click', ev => {
+    if (drag.moved) { drag.moved = false; return; }
+    if (!ev.target.closest('#controls')) controls(true);
+  });
+  // When stopped, drag the text up or down to find a pickup point; it settles on the nearest line.
+  const drag = { on: false, moved: false };
+  stage.addEventListener('pointerdown', ev => {
+    if (!run || running() || ev.target.closest('#controls') || !ev.isPrimary) return;
+    Object.assign(drag, { on: true, moved: false, y0: ev.clientY, start: run.y });
+  });
+  stage.addEventListener('pointermove', ev => {
+    if (!drag.on) return;
+    const dy = ev.clientY - drag.y0;
+    if (Math.abs(dy) > 8) drag.moved = true;
+    if (!drag.moved) return;
+    const first = lines[0], last = lines[lines.length - 1];
+    run.y = Math.max(first.top, Math.min(last.top + last.h, drag.start - dy));
+    setY(run.y);
+  });
+  const endDrag = () => {
+    if (!drag.on) return;
+    drag.on = false;
+    if (!drag.moved) return;
+    // Settle on the sentence start closest to where the text was left.
+    const S = sentenceStarts();
+    let best = S[0];
+    for (const i of S) { const L = tl.events[i].line; if (Math.abs(L.top + L.h / 2 - run.y) < Math.abs(tl.events[best].line.top + tl.events[best].line.h / 2 - run.y)) best = i; }
+    cueAt(best);
+  };
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
+  $('cBack').addEventListener('click', () => jump(-1));
+  $('cFwd').addEventListener('click', () => jump(1));
   $('cPlay').addEventListener('click', play);
   $('cStop').addEventListener('click', stop);
   $('cTop').addEventListener('click', backToTop);
@@ -371,6 +447,8 @@
     if (ev.key === 'Escape') close();
     else if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); running() ? stop() : play(); }
     else if (ev.key === 'Home' || ev.key === 'r' || ev.key === 'R') backToTop();
+    else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp' || ev.key === 'PageUp') { ev.preventDefault(); jump(-1); }
+    else if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown' || ev.key === 'PageDown') { ev.preventDefault(); jump(1); }
   });
   window.addEventListener('resize', () => { if (!stage.hidden && tl) { text.style.paddingTop = text.style.paddingBottom = `${stage.clientHeight}px`; layout(); } });
   $('go').addEventListener('click', open);
