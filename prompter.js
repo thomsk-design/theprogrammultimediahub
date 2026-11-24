@@ -210,12 +210,22 @@
     const h = box.offsetHeight || 300, line = Number(ui.size.value) * 1.4;
     box.style.top = (guide - h - 24 >= 12) ? `${guide - h - 24}px` : `${Math.min(H - h - 100, guide + line * 2)}px`;
   }
+  // Glass mode mirrors the text; practice mode reads normally on the iPad itself.
+  function applyMirror() {
+    const m = ui.mirror.checked, b = $('cMirror');
+    flip.classList.toggle('mirrored', m);
+    b.querySelector('b').textContent = m ? 'Practice' : 'Glass';
+    b.title = m ? 'Show the words reading normally, for practice' : 'Mirror the words for the teleprompter glass';
+    b.setAttribute('aria-pressed', String(!m));
+    stage.classList.toggle('practice', !m);
+  }
+  function toggleMirror() { ui.mirror.checked = !ui.mirror.checked; persist(); labels(); applyMirror(); controls(true); }
   function open() {
     if (!ui.script.value.trim()) { ui.script.focus(); return; }
     persist();
     $('setup').hidden = true;
     stage.hidden = false;
-    flip.classList.toggle('mirrored', ui.mirror.checked);
+    applyMirror();
     render();
     run = { i: 0, phase: 'idle', t: 0, y: targetY(0, 0), vy: 0, paused: false };
     setY(run.y); paint(-1);
@@ -449,10 +459,12 @@
   $('cStop').addEventListener('click', stop);
   $('cTop').addEventListener('click', backToTop);
   $('cScript').addEventListener('click', close);
+  $('cMirror').addEventListener('click', toggleMirror);
   document.addEventListener('keydown', ev => {
     if (stage.hidden) return;
     if (ev.key === 'Escape') close();
     else if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); running() ? stop() : play(); }
+    else if (ev.key === 'm' || ev.key === 'M') toggleMirror();
     else if (ev.key === 'Home' || ev.key === 'r' || ev.key === 'R') backToTop();
     else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp' || ev.key === 'PageUp') { ev.preventDefault(); jump(-1); }
     else if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown' || ev.key === 'PageDown') { ev.preventDefault(); jump(1); }
@@ -506,7 +518,10 @@
     markLoaded();
     ui.script.addEventListener('input', markLoaded);
     // A link such as /prompter?script=w2d1 opens with that script loaded.
-    const want = new URLSearchParams(location.search).get('script');
+    const q = new URLSearchParams(location.search), want = q.get('script');
+    // ?practice=1 opens reading normally (not mirrored); ?glass=1 forces the mirror back on.
+    if (q.has('practice')) { ui.mirror.checked = false; persist(); }
+    if (q.has('glass')) { ui.mirror.checked = true; persist(); }
     if (want) load(want.toLowerCase());
   }
 

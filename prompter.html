@@ -43,7 +43,7 @@
 
     <div class="card settings">
       <h2>Settings</h2>
-      <label class="toggle"><input type="checkbox" id="mirror" checked><span>Mirror text for the glass</span></label>
+      <label class="toggle"><input type="checkbox" id="mirror" checked><span>Mirror text for the glass <small>Turn off to practise straight from the iPad: the words read normally. You can also switch with the Practice / Glass button while the prompter is open.</small></span></label>
       <label class="toggle"><input type="checkbox" id="sync" checked><span>Keep in step with Adam’s voice <small>Listens through the iPad microphone and lines up with him at the end of each sentence. Nothing is recorded.</small></span></label>
       <label>Pace <output id="paceOut">100%</output>
         <input type="range" id="pace" min="80" max="120" step="1" value="100">
@@ -75,6 +75,7 @@
     <button id="cPlay" type="button" class="play"><span aria-hidden="true">▶</span> <b>Start</b></button>
     <button id="cStop" type="button" class="stop"><span aria-hidden="true">■</span> Stop</button>
     <button id="cFwd" type="button">Forward <span aria-hidden="true" style="margin:0 0 0 6px">▶▶</span></button>
+    <button id="cMirror" type="button" class="mir" aria-pressed="false"><span aria-hidden="true">⇋</span> <b>Practice</b></button>
     <button id="cScript" type="button">Edit script</button>
   </div>
 </section>
