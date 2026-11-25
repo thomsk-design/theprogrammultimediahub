@@ -61,6 +61,10 @@
         <small class="muted">Line it up with the camera lens behind the glass.</small>
       </label>
       <label>Countdown before start <output id="cdOut">5 s</output><input type="range" id="countdown" min="3" max="15" step="1" value="5"></label>
+      <label class="toggle"><input type="checkbox" id="gong" checked><span>Gentle gong before a pause ends <small>Pauses longer than 3 seconds ring a soft gong with 1 second left, so Adam knows to come back in. It plays through the iPad speaker, so the camera mic can pick it up.</small></span></label>
+      <label>Gong volume <output id="gongOut">40%</output>
+        <span class="gong-row"><input type="range" id="gongVol" min="5" max="100" step="5" value="40"><button type="button" id="gongTest">Test</button></span>
+      </label>
       <button class="primary" id="go">Open prompter</button>
       <p class="small muted tips">On the iPad: in Safari tap Share → <b>Add to Home Screen</b> so the prompter opens full screen. Keep the iPad plugged in; the screen stays awake while the prompter runs.</p>
     </div>
