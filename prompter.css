@@ -75,3 +75,7 @@ textarea:focus{outline:2px solid var(--gold);outline-offset:1px}
 .drop p{flex-basis:100%;margin:0}
 .drop.over{border-color:var(--gold);background:rgba(232,184,75,.08)}
 .drop.busy{opacity:.7}
+.gong-row{display:flex;gap:10px;align-items:center}
+.gong-row input{flex:1}
+.gong-row button{background:#15130f;color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:6px 14px;min-height:36px;font-weight:600}
+.gong-row button:disabled,.gong-row input:disabled{opacity:.4}

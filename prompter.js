@@ -10,17 +10,18 @@
   const CUE_DEFAULT = { silence: 3, pause: 2, breath: 1 };
   const KEY = 'program-video-prompter-v1';
   const $ = id => document.getElementById(id);
-  const ui = { script: $('script'), mirror: $('mirror'), sync: $('sync'), pace: $('pace'), size: $('size'), line: $('line'), countdown: $('countdown') };
+  const ui = { script: $('script'), mirror: $('mirror'), sync: $('sync'), pace: $('pace'), size: $('size'), line: $('line'), countdown: $('countdown'), gong: $('gong'), gongVol: $('gongVol') };
 
   // ---------- settings ----------
   const saved = (() => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; } })();
   ui.script.value = saved.script || '';
-  for (const k of ['pace', 'size', 'line', 'countdown']) if (saved[k]) ui[k].value = saved[k];
+  for (const k of ['pace', 'size', 'line', 'countdown', 'gongVol']) if (saved[k]) ui[k].value = saved[k];
+  if (typeof saved.gong === 'boolean') ui.gong.checked = saved.gong;
   if (typeof saved.mirror === 'boolean') ui.mirror.checked = saved.mirror;
   if (typeof saved.sync === 'boolean') ui.sync.checked = saved.sync;
   function persist() {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ script: ui.script.value, pace: ui.pace.value, size: ui.size.value, line: ui.line.value, countdown: ui.countdown.value, mirror: ui.mirror.checked, sync: ui.sync.checked }));
+      localStorage.setItem(KEY, JSON.stringify({ script: ui.script.value, pace: ui.pace.value, size: ui.size.value, line: ui.line.value, countdown: ui.countdown.value, mirror: ui.mirror.checked, sync: ui.sync.checked, gong: ui.gong.checked, gongVol: ui.gongVol.value }));
       $('saved').textContent = 'Saved on this iPad.';
     } catch { $('saved').textContent = 'Could not save. Keep a copy of the script.'; }
   }
@@ -29,6 +30,8 @@
     $('sizeOut').textContent = `${ui.size.value} px`;
     $('lineOut').textContent = `${ui.line.value}% from top`;
     $('cdOut').textContent = `${ui.countdown.value} s`;
+    $('gongOut').textContent = ui.gong.checked ? `${ui.gongVol.value}%` : 'Off';
+    ui.gongVol.disabled = $('gongTest').disabled = !ui.gong.checked;
     const s = Math.round(model(parse(ui.script.value)).total);
     $('estimate').textContent = ui.script.value.trim() ? `About ${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s at Adam’s pace` : '—';
   }
@@ -125,12 +128,48 @@
         mic.floor = mic.db < mic.floor ? mic.floor + (mic.db - mic.floor) * Math.min(1, dt * 4) : mic.floor + Math.min(0.6 * dt, mic.db - mic.floor);
         const over = mic.db - mic.floor;
         mic.voice = mic.voice ? over > 7 : over > 11;
+        if (mic.muteUntil && performance.now() < mic.muteUntil) { mic.voice = false; mic.talk = 0; }
         if (mic.voice) { mic.talk += dt; mic.quiet = 0; } else { mic.quiet += dt; if (mic.quiet > 0.15) mic.talk = 0; }
       };
       mic.stream = stream; mic.ctx = ctx; mic.on = true;
       return true;
     } catch { return false; }
   }
+  // ---------- gong: a soft struck-bowl tone, made on the iPad (no sound file) ----------
+  // Rings with 1 s left on any pause longer than 3 s. While it rings, voice sync ignores the
+  // microphone so the gong isn't mistaken for Adam speaking.
+  const GONG_MIN = 3, GONG_LEAD = 1, GONG_RING = 2.5;
+  let actx = null;
+  function audio() {
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state !== 'running') actx.resume();
+    } catch { actx = null; }
+    return actx;
+  }
+  function gong() {
+    const ctx = audio();
+    if (!ctx) return;
+    const t0 = ctx.currentTime + 0.02, vol = Number(ui.gongVol.value) / 100;
+    const out = ctx.createGain();
+    out.gain.value = 0.32 * vol * vol + 0.02 * vol;
+    const tone = ctx.createBiquadFilter();
+    tone.type = 'lowpass'; tone.frequency.value = 2400; tone.Q.value = 0.4;
+    tone.connect(out); out.connect(ctx.destination);
+    // Partials of a small bowl gong: low, warm, slightly beating; the higher ones fade first.
+    const f0 = 196;
+    for (const [ratio, amp, decay, detune] of [[1, 1, 4.2, 0.6], [1, 0.5, 4.2, -0.6], [2.71, 0.32, 2.6, 0.8], [5.15, 0.12, 1.4, 0], [8.4, 0.05, 0.8, 0]]) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = f0 * ratio + detune;
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(amp, t0 + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0008, t0 + decay);
+      o.connect(g); g.connect(tone);
+      o.start(t0); o.stop(t0 + decay + 0.05);
+    }
+    mic.muteUntil = performance.now() + GONG_RING * 1000;
+  }
+
   function stopMic() {
     if (!mic.on) return;
     mic.stream.getTracks().forEach(t => t.stop());
@@ -243,6 +282,7 @@
   function state(s) { $('state').textContent = s; }
 
   async function start() {
+    if (ui.gong.checked) audio(); // unlock sound on this tap (iPad needs a tap first)
     if (ui.sync.checked) {
       state('Asking for the microphone…');
       const ok = await startMic();
@@ -264,6 +304,7 @@
     if (run.phase === 'done') { backToTop(); return start(); }
     if (run.phase === 'idle') return start().then(controls);
     if (!run.paused) return;
+    if (ui.gong.checked) audio();
     run.paused = false;
     stage.classList.add('running');
     state(mic.on ? 'In step with Adam' : 'Running at Adam’s pace');
@@ -355,7 +396,7 @@
     const e = tl.events[i];
     paint(i);
     if (e.k === 'cue') {
-      run.phase = 'cue'; run.t = 0;
+      run.phase = 'cue'; run.t = 0; run.gonged = false;
       $('cueNum').textContent = Math.ceil(e.item.secs);
       $('cueBar').style.width = '100%';
       $('cue').hidden = false;
@@ -396,6 +437,7 @@
       const e = tl.events[run.i];
       run.t += dt;
       const left = Math.max(0, e.hold - run.t);
+      if (!run.gonged && ui.gong.checked && e.item.kind !== 'breath' && e.item.secs > GONG_MIN && left <= GONG_LEAD) { run.gonged = true; gong(); }
       $('cueNum').textContent = Math.ceil(left * e.item.secs / e.hold);
       $('cueBar').style.width = `${(left / e.hold) * 100}%`;
       const resumed = mic.on && run.t > e.hold * 0.6 && mic.talk > 0.5;
@@ -471,6 +513,7 @@
   });
   window.addEventListener('resize', () => { if (!stage.hidden && tl) { text.style.paddingTop = text.style.paddingBottom = `${stage.clientHeight}px`; layout(); } });
   $('go').addEventListener('click', open);
+  $('gongTest').addEventListener('click', gong);
   for (const b of document.querySelectorAll('[data-ins]')) b.addEventListener('click', () => {
     const t = ui.script, s = t.selectionStart, e = t.selectionEnd, ins = ` ${b.dataset.ins} `;
     t.value = t.value.slice(0, s) + ins + t.value.slice(e);
@@ -479,7 +522,7 @@
   });
   let typing;
   ui.script.addEventListener('input', () => { clearTimeout(typing); typing = setTimeout(() => { persist(); labels(); }, 300); });
-  for (const k of ['mirror', 'sync', 'pace', 'size', 'line', 'countdown']) ui[k].addEventListener('input', () => { persist(); labels(); });
+  for (const k of ['mirror', 'sync', 'pace', 'size', 'line', 'countdown', 'gong', 'gongVol']) ui[k].addEventListener('input', () => { persist(); labels(); });
   labels();
 
   // ---------- Program scripts ----------
