@@ -525,6 +525,40 @@
     if (want) load(want.toLowerCase());
   }
 
+  // ---------- import a Word / PDF / text script ----------
+  const drop = $('drop'), msg = $('dropMsg');
+  async function importFile(file) {
+    if (!file || !window.PrompterImport) return;
+    drop.classList.add('busy'); msg.textContent = `Reading ${file.name}…`;
+    try {
+      const r = await window.PrompterImport.fromFile(file);
+      const cur = ui.script.value.trim();
+      if (cur && !lib.some(x => x.text === ui.script.value) && !confirm(`Replace the script that’s in the box with ${r.title}?`)) { msg.textContent = 'Kept the script that was already in the box.'; return; }
+      ui.script.value = r.text;
+      persist(); labels(); markLoaded();
+      ui.script.scrollTop = 0;
+      const p = r.pauses ? `${r.pauses} pause${r.pauses > 1 ? 's' : ''} added (${Math.round(r.pauseSecs)} s in all)` : 'No pauses were written in it; add any with the buttons below';
+      const left = r.removed.length ? ` Left out: ${r.removed.slice(0, 6).join(' · ')}${r.removed.length > 6 ? ' …' : ''}.` : '';
+      msg.innerHTML = '';
+      msg.append(Object.assign(document.createElement('b'), { textContent: `${r.title} loaded. ` }), `${p}. Check it over before the take.${left}`);
+      $('saved').textContent = `${r.title} imported. Edits are saved on this iPad.`;
+    } catch (e) {
+      msg.textContent = e && e.message ? e.message : 'Could not read that file.';
+    } finally { drop.classList.remove('busy'); }
+  }
+  $('pick').addEventListener('click', () => $('file').click());
+  $('file').addEventListener('change', e => { importFile(e.target.files[0]); e.target.value = ''; });
+  const setup = $('setup');
+  let depth = 0;
+  setup.addEventListener('dragenter', e => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); depth++; drop.classList.add('over'); } });
+  setup.addEventListener('dragover', e => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+  setup.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; drop.classList.remove('over'); } });
+  setup.addEventListener('drop', e => {
+    if (!e.dataTransfer?.files?.length) return;
+    e.preventDefault(); depth = 0; drop.classList.remove('over');
+    importFile(e.dataTransfer.files[0]);
+  });
+
   // Exposed for testing the pace model against real recordings.
   window.PrompterModel = { parse, model, PACE };
 })();
