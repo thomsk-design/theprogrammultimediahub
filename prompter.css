@@ -69,3 +69,9 @@ textarea:focus{outline:2px solid var(--gold);outline-offset:1px}
 .library .lib-head{width:100%;font-weight:600;margin:6px 0 0}
 .library .lib-head:first-child{margin-top:0}
 @media (max-width:1000px){.controls{gap:6px;padding:8px;max-width:calc(100vw - 20px)}.controls button{padding:0 11px;font-size:16px}.controls .play{min-width:120px}}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:14px 16px;margin:0 0 16px;display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;transition:border-color .2s,background .2s}
+.drop>div{flex:1 1 220px}
+.drop button{background:#15130f;color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:8px 16px;min-height:40px;font-weight:600}
+.drop p{flex-basis:100%;margin:0}
+.drop.over{border-color:var(--gold);background:rgba(232,184,75,.08)}
+.drop.busy{opacity:.7}
