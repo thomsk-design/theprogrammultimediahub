@@ -165,7 +165,7 @@
     return letters.length >= 3 && letters === letters.toUpperCase() && words(t) <= 8 && !/[a-z]/.test(t);
   }
   function clean(rawLines) {
-    const lines = rawLines.map(l => l.replace(/ /g, ' ').replace(/[​﻿]/g, '').replace(/\s+/g, ' ').trim());
+    const lines = rawLines.map(l => l.replace(/\u00a0/g, ' ').replace(/[\u200b\ufeff]/g, '').replace(/\s+/g, ' ').trim());
     const removed = [];
     let pauses = 0, pauseSecs = 0;
     // Title block: leading lines until the first real sentence.
