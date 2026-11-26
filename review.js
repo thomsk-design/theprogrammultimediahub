@@ -34,6 +34,7 @@
     const parts = location.hash.slice(1).split('/');
     return { id: parts[1] || '', sub: parts[2] || '', a: parts[3] || '', b: parts[4] || '' };
   };
+  const active = () => ['#review', '#overview'].includes(location.hash.split('/')[0]);
   const typing = () => /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '');
   const kindTag = k => `<span class="tag ${k === 'video' ? 'blue' : k === 'text' ? '' : 'amber'}">${k === 'video' ? 'Video' : k === 'text' ? 'Text' : 'Audio'}</span>`;
 
@@ -510,7 +511,7 @@
 
   // ---------- events ----------
   document.addEventListener('click', async e => {
-    if (location.hash.split('/')[0] !== '#review') return;
+    if (!active()) return;
     const t = e.target.closest('[data-rv-tab],[data-rv-filter],[data-rv-reply],[data-rv-reply-cancel],[data-rv-resolve],[data-rv-edit],[data-rv-edit-cancel],[data-rv-delete],[data-rv-seek],[data-rv-step],[data-rv-note-here],[data-rv-anchor-now],[data-rv-anchor-clear],[data-rv-pick-line],[data-rv-add-version],[data-rv-drop],[data-rv-rename],[data-rv-archive],[data-rv-remove-version],[data-rv-mode],[data-rv-hear],[data-rv-link],[data-rv-cmp-play],[data-rv-cmp-step],[data-rv-cmp-seek],[data-rv-swap],.rv-row');
     if (!t) return;
     const d = t.dataset, root = document.querySelector('#main [data-review-view]');
@@ -597,7 +598,7 @@
     const b = document.querySelector('[data-rv-compose-body]'); if (b) b.focus();
   }
   document.addEventListener('change', e => {
-    if (location.hash.split('/')[0] !== '#review') return;
+    if (!active()) return;
     if (e.target.matches('[data-rv-file]')) { const root = document.querySelector('#main [data-review-view]'); addFiles(e.target.files, root ? item(root.dataset.item) : null); e.target.value = ''; }
     if (e.target.matches('[data-rv-show-old]')) { ui.showOld = e.target.checked; refresh(); }
     if (e.target.matches('[data-rv-speed]') && player) player.playbackRate = Number(e.target.value);
@@ -652,6 +653,29 @@
     const root = document.querySelector('#main [data-review-view]');
     addFiles(e.dataTransfer.files, root && !root.dataset.compare ? item(root.dataset.item) : null);
   });
+
+  // ---------- Overview: the multimedia library up front ----------
+  function libraryPanel() {
+    if (!member()) return '';
+    if (!db.loaded) { load().then(() => { if (location.hash === '#overview') render(); }); }
+    const recent = db.items.map(i => {
+      const vs = versionsOf(i.id), last = vs[vs.length - 1];
+      const updated = [i.created_at, ...vs.map(v => v.created_at), ...notesOf(i.id).map(n => n.created_at)].sort().pop();
+      return { i, last, vs, updated, open: notesOf(i.id).filter(n => !n.resolved && !n.parent_id).length };
+    }).sort((a, b) => String(b.updated).localeCompare(String(a.updated))).slice(0, 6);
+    const icon = k => k === 'video' ? '▶' : k === 'audio' ? '♫' : '≡';
+    const cards = recent.map(r => `<a class="rv-card" href="#review/${esc(r.i.id)}"><span class="rv-card-icon ${r.i.kind}">${icon(r.i.kind)}</span><span class="rv-card-body"><strong>${esc(r.i.title)}</strong><small>${r.last ? esc(vname(r.last)) : 'no file yet'} · ${r.vs.length} version${r.vs.length === 1 ? '' : 's'}</small><small class="muted">${esc(when(r.updated))}</small></span>${r.open ? `<span class="rv-count" title="Open notes">${r.open}</span>` : ''}</a>`).join('');
+    return `<section class="rv-library"><div class="rv-library-head"><div><div class="eyebrow">MULTIMEDIA LIBRARY</div><h2>Cuts, edits and scripts</h2></div><div class="row"><a class="btn" href="#media">Media library</a><a class="btn primary" href="#review">Open Review room →</a></div></div>
+      ${dropzone('Drop videos, audio or text files here', 'Upload a rough cut, edit, script or transcript. Add it as a new item or the next version of one already here.')}
+      ${!db.loaded ? '<div class="empty">Loading…</div>' : cards ? `<div class="rv-cards">${cards}</div>` : empty('Nothing here yet. Drop your first cut above.')}</section>`;
+  }
+  const originalOverview = window.overview;
+  window.overview = function () {
+    let html = originalOverview();
+    html = html.replace(/<section class="panel"><div class="panel-head"><h2>First things first<\/h2>[\s\S]*?<\/section>/, '');
+    const at = html.indexOf('<section class="dashboard-focus">');
+    return at < 0 ? html + libraryPanel() : html.slice(0, at) + libraryPanel() + html.slice(at);
+  };
 
   // ---------- hook into the hub's render ----------
   let lastHash = '';

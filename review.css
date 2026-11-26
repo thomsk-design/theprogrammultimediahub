@@ -131,3 +131,19 @@
 
 @media (max-width:1100px){.rv-grid,.rv-grid.wide{grid-template-columns:1fr}.rv-notes{position:static;max-height:none}}
 @media (max-width:700px){.rv-cmp-stage{grid-template-columns:1fr}.rv-cmp-stage.side .rv-cmp-pane.b{grid-area:auto}.rv-transport [data-rv-note-here]{margin-left:0;width:100%}}
+
+/* Overview: multimedia library up front */
+.rv-library{border:1px solid var(--line);border-radius:10px;background:var(--paper);padding:22px 24px;margin-bottom:26px}
+.rv-library-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.rv-library-head h2{font:500 26px/1.1 var(--serif);margin:4px 0 0}
+.rv-library-head .btn{margin:0}
+.rv-library .rv-drop{margin-bottom:16px;padding:26px}
+.rv-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.rv-card{display:flex;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:#1f1d18;text-decoration:none;color:var(--ink);transition:border-color .15s,background .15s}
+.rv-card:hover{border-color:var(--gold);background:#2a2720}
+.rv-card-icon{display:grid;place-items:center;flex:none;width:40px;height:40px;border-radius:8px;background:#342c1d;color:var(--gold);font-size:16px}
+.rv-card-icon.text{background:#26312f;color:#b6cdc7}
+.rv-card-body{display:flex;flex-direction:column;min-width:0;flex:1}
+.rv-card-body strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rv-card-body small{font-size:11px;color:#c7c2b8}
+.rv-card-body small.muted{color:var(--muted)}

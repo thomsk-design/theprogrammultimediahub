@@ -5,7 +5,7 @@ const seed={assets:[],sessions:[],scripts:[],people:[],sops:[{"id": "sop-sound-d
 let state;try{state=JSON.parse(localStorage.getItem(KEY))||structuredClone(seed)}catch{state=structuredClone(seed)}
 if(!state.sops.some(s=>s.id==='sop-sound-design')){state.sops.push(structuredClone(seed.sops.find(s=>s.id==='sop-sound-design')));save()}
 let route='overview',filter='',tabFilter='All',scheduleView='list',month=10,year=2026;
-const routes=[['overview','◫','Overview'],['schedule','▦','Production schedule'],['media','♫','Media library'],['processing','◉','Audio desk'],['scripts','≡','Scripts'],['sops','▤','SOP library'],['talent','♙','Talent portal'],['people','◎','Talent roster'],['review','▶','Review room'],['connections','⌁','Connections']];
+const routes=[['overview','◫','Overview'],['review','▶','Review room'],['schedule','▦','Production schedule'],['media','♫','Media library'],['processing','◉','Audio desk'],['scripts','≡','Scripts'],['sops','▤','SOP library'],['talent','♙','Talent portal'],['people','◎','Talent roster'],['connections','⌁','Connections']];
 const stages=['Planned','Recorded','In edit','Ready for review','Approved','Delivered'];
 function save(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch{toast('Browser storage is full. Export your workspace before continuing.')}}
 function toast(t){$('#toast').textContent=t;$('#toast').style.display='block';clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('#toast').style.display='none',4500)}
