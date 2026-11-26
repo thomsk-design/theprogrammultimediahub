@@ -62,8 +62,7 @@ async function versionFor(token, id) {
 }
 
 async function bridgeFor(token) {
-  if (bridgeUrl.url && bridgeUrl.until > Date.now()) return bridgeUrl.url;
-  if (!token) return bridgeUrl.url;
+  if (!token) return bridgeUrl.url; // passes carry the bridge address; with a sign-in, always read the current one
   const res = await rest('program_settings?key=eq.drive_bridge&select=value', token);
   const rows = res.ok ? await res.json() : [];
   const url = (rows[0] && rows[0].value && rows[0].value.url) || '';
@@ -87,7 +86,7 @@ async function driveToken(token) {
 export async function GET(request) {
   const pass = readPass(new URL(request.url).searchParams.get('t'));
   if (!pass) return text(401, 'This playback link expired. Reload the page.');
-  if (pass.b && !bridgeUrl.url) bridgeUrl = { url: pass.b, until: Date.now() + 6 * 3600 * 1000 };
+  if (pass.b && pass.b !== bridgeUrl.url) { bridgeUrl = { url: pass.b, until: Date.now() + 6 * 3600 * 1000 }; drive = { token: '', until: 0 }; }
   const row = { drive_id: pass.d, mime: pass.m, size: pass.s };
   const token = '';
 
