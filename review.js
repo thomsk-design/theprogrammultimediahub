@@ -74,20 +74,23 @@
     return data.content || '';
   }
 
-  // Signed-in members get a short-lived playback cookie for /api/media.
-  let cookieAt = 0, cookieWait = null;
-  function mediaReady() {
-    if (Date.now() - cookieAt < 45 * 60 * 1000) return Promise.resolve();
-    if (cookieWait) return cookieWait;
-    cookieWait = (async () => {
+  // Signed-in members get a short-lived playback pass for each file from /api/media.
+  const passes = new Map(); // version id → { url, at } or pending promise
+  async function src(v) {
+    const hit = passes.get(v.id);
+    if (hit && hit.url && Date.now() - hit.at < 5 * 3600 * 1000) return hit.url;
+    if (hit && hit.then) return hit;
+    const p = (async () => {
       const token = await HubCloud.token();
-      const res = await fetch('/api/media', { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
-      if (!res.ok) throw new Error(await res.text() || 'Playback isn’t available.');
-      cookieAt = Date.now();
-    })().finally(() => { cookieWait = null; });
-    return cookieWait;
+      const res = await fetch('/api/media?v=' + encodeURIComponent(v.id), { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+      if (!res.ok) throw new Error((await res.text()) || 'Playback isn’t available.');
+      const url = '/api/media?t=' + encodeURIComponent((await res.json()).pass);
+      passes.set(v.id, { url, at: Date.now() });
+      return url;
+    })();
+    passes.set(v.id, p);
+    try { return await p; } catch (error) { passes.delete(v.id); throw error; }
   }
-  const src = v => '/api/media?v=' + encodeURIComponent(v.id);
 
   // ---------- page ----------
   window.reviewPage = function () {
@@ -223,12 +226,12 @@
     if (it.kind === 'text') return mountText(root, it, v);
     player = root.querySelector('#rv-player');
     const msg = root.querySelector('.rv-player-msg');
-    mediaReady().then(() => { player.src = src(v); }).catch(error => { msg.hidden = false; msg.textContent = error.message; });
+    src(v).then(url => { player.src = url; }).catch(error => { msg.hidden = false; msg.textContent = 'Couldn’t play this file: ' + error.message; });
     player.addEventListener('error', async () => {
       msg.hidden = false;
       // Ask the relay what went wrong so the message is specific.
       try {
-        const res = await fetch(src(v), { headers: { Range: 'bytes=0-0' } });
+        const res = await fetch(await src(v), { headers: { Range: 'bytes=0-0' } });
         if (!res.ok) { const why = (await res.text()).slice(0, 300); msg.innerHTML = `Couldn’t play this file: ${esc(why)}${v.link ? ` <a class="text-link" target="_blank" rel="noopener" href="${esc(v.link)}">Open it in Drive ↗</a>` : ''}`; return; }
       } catch {}
       msg.innerHTML = /\.mov$/i.test(v.file_name || '') ? 'This browser can’t play this .mov file (it may be ProRes). Upload an H.264 .mp4 review copy, or <a class="text-link" target="_blank" rel="noopener" href="' + esc(v.link || '#') + '">open it in Drive ↗</a>.' : 'Couldn’t play this file. <a class="text-link" target="_blank" rel="noopener" href="' + esc(v.link || '#') + '">Open it in Drive ↗</a>';
@@ -363,7 +366,7 @@
     Object.assign(cmp, { A, B });
     const applyHear = () => { A.muted = ui.hear !== 'a'; B.muted = ui.hear !== 'b'; };
     applyHear();
-    mediaReady().then(() => { A.src = src(va); B.src = src(vb); }).catch(error => toast(error.message));
+    Promise.all([src(va), src(vb)]).then(([a, b]) => { A.src = a; B.src = b; }).catch(error => toast('Couldn’t play: ' + error.message));
     const playBtn = root.querySelector('[data-rv-cmp-play]'), scrub = root.querySelector('[data-rv-cmp-scrub]'), time = root.querySelector('[data-rv-cmp-time]');
     let scrubbing = false;
     A.addEventListener('play', () => { playBtn.textContent = '❚❚'; if (ui.linked) B.play().catch(() => {}); });
