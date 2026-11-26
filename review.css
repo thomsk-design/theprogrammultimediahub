@@ -147,3 +147,6 @@
 .rv-card-body strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rv-card-body small{font-size:11px;color:#c7c2b8}
 .rv-card-body small.muted{color:var(--muted)}
+a.rv-stat{display:block;text-decoration:none;color:inherit;transition:border-color .15s}
+a.rv-stat:hover{border-color:var(--gold)}
+a.rv-stat .label{display:block}

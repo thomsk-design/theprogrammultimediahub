@@ -677,12 +677,40 @@
       ${dropzone('Drop videos, audio or text files here', 'Upload a rough cut, edit, script or transcript. Add it as a new item or the next version of one already here.')}
       ${!db.loaded ? '<div class="empty">Loading…</div>' : cards ? `<div class="rv-cards">${cards}</div>` : empty('Nothing here yet. Drop your first cut above.')}</section>`;
   }
+  // Counters from the team's real data: files uploaded to Drive through the hub, review items,
+  // open notes and upcoming sessions (not this browser's local catalogue).
+  function glance() {
+    const files = Array.isArray(state.files) ? state.files : [];
+    const bytes = files.reduce((n, f) => n + (Number(f.size) || 0), 0);
+    const videos = files.filter(f => /\.(mp4|m4v|mov|webm|mxf)$/i.test(f.name || '')).length;
+    const audio = files.filter(f => /\.(wav|mp3|m4a|aac|aif|aiff|flac)$/i.test(f.name || '')).length;
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Regina' });
+    const upcoming = (state.sessions || []).filter(x => x.date >= today && !['Cancelled', 'Complete'].includes(x.status)).length;
+    const open = db.notes.filter(n => !n.parent_id && !n.resolved);
+    const waiting = new Set(open.map(n => n.item_id)).size;
+    const pad = n => String(n).padStart(2, '0');
+    const tile = (href, label, icon, n, sub) => `<a class="stat rv-stat" href="${href}"><span class="label">${label}</span><span class="stat-icon">${icon}</span><strong>${n}</strong><small>${sub}</small></a>`;
+    return `<div class="dashboard-section-label">AT A GLANCE <span>Live from the team workspace</span></div><div class="stats">
+      ${tile('#media', 'Files in Drive', '△', pad(files.length), files.length ? `${videos} video · ${audio} audio · ${esc(mb(bytes) || '0 MB')}` : 'Uploaded through the hub')}
+      ${tile('#review', 'Cuts in review', '▶', db.loaded ? pad(db.items.length) : '··', db.loaded ? `${db.versions.length} version${db.versions.length === 1 ? '' : 's'} across all items` : 'Loading…')}
+      ${tile('#review', 'Open notes', '✎', db.loaded ? pad(open.length) : '··', db.loaded ? (open.length ? `On ${waiting} item${waiting === 1 ? '' : 's'}` : 'Nothing waiting') : 'Loading…')}
+      ${tile('#schedule', 'Upcoming sessions', '◉', pad(upcoming), upcoming ? 'On the production schedule' : 'Nothing scheduled yet')}
+    </div>`;
+  }
   const originalOverview = window.overview;
   window.overview = function () {
-    let html = originalOverview();
-    html = html.replace(/<section class="panel"><div class="panel-head"><h2>First things first<\/h2>[\s\S]*?<\/section>/, '');
+    const box = document.createElement('div');
+    box.innerHTML = originalOverview();
+    // Remove the setup checklist, the launch progress band and the connections panel.
+    box.querySelectorAll('.panel').forEach(p => { const h = p.querySelector('.panel-head h2'); if (h && ['First things first', 'Connected to the desk'].includes(h.textContent.trim())) p.remove(); });
+    box.querySelectorAll('.launch').forEach(el => el.remove());
+    // Swap the local-browser counters for live ones.
+    const label = box.querySelector('.dashboard-section-label'), stats = box.querySelector('.stats');
+    if (stats) stats.remove();
+    if (label) label.outerHTML = glance(); else box.insertAdjacentHTML('beforeend', glance());
+    let html = box.innerHTML;
     const at = html.indexOf('<section class="dashboard-focus">');
-    return at < 0 ? html + libraryPanel() : html.slice(0, at) + libraryPanel() + html.slice(at);
+    return at < 0 ? libraryPanel() + html : html.slice(0, at) + libraryPanel() + html.slice(at);
   };
 
   // ---------- hook into the hub's render ----------
