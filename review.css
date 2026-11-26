@@ -150,3 +150,4 @@
 a.rv-stat{display:block;text-decoration:none;color:inherit;transition:border-color .15s}
 a.rv-stat:hover{border-color:var(--gold)}
 a.rv-stat .label{display:block}
+.rv-ext{margin-left:auto;font-size:11px;color:#686055}

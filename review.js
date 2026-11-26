@@ -673,7 +673,7 @@
     }).sort((a, b) => String(b.updated).localeCompare(String(a.updated))).slice(0, 6);
     const icon = k => k === 'video' ? '▶' : k === 'audio' ? '♫' : '≡';
     const cards = recent.map(r => `<a class="rv-card" href="#review/${esc(r.i.id)}"><span class="rv-card-icon ${r.i.kind}">${icon(r.i.kind)}</span><span class="rv-card-body"><strong>${esc(r.i.title)}</strong><small>${r.last ? esc(vname(r.last)) : 'no file yet'} · ${r.vs.length} version${r.vs.length === 1 ? '' : 's'}</small><small class="muted">${esc(when(r.updated))}</small></span>${r.open ? `<span class="rv-count" title="Open notes">${r.open}</span>` : ''}</a>`).join('');
-    return `<section class="rv-library"><div class="rv-library-head"><div><div class="eyebrow">MULTIMEDIA LIBRARY</div><h2>Cuts, edits and scripts</h2></div><div class="row"><a class="btn" href="#media">Media library</a><a class="btn primary" href="#review">Open Review room →</a></div></div>
+    return `<section class="rv-library"><div class="rv-library-head"><div><div class="eyebrow">MULTIMEDIA LIBRARY</div><h2>Cuts, edits and scripts</h2></div><div class="row"><a class="btn" href="/prompter" target="_blank" rel="noopener">Video prompter ↗</a><a class="btn" href="#media">Media library</a><a class="btn primary" href="#review">Open Review room →</a></div></div>
       ${dropzone('Drop videos, audio or text files here', 'Upload a rough cut, edit, script or transcript. Add it as a new item or the next version of one already here.')}
       ${!db.loaded ? '<div class="empty">Loading…</div>' : cards ? `<div class="rv-cards">${cards}</div>` : empty('Nothing here yet. Drop your first cut above.')}</section>`;
   }
@@ -727,6 +727,15 @@
   };
   // Overview count of open notes on the review room link.
   const nav = () => {
+    // The iPad video prompter lives on its own page; link it for everyone.
+    const navEl = document.querySelector('#nav');
+    if (navEl && demoRole && !navEl.querySelector('.rv-prompter-link')) {
+      const link = document.createElement('a');
+      link.href = '/prompter'; link.target = '_blank'; link.rel = 'noopener'; link.className = 'rv-prompter-link';
+      link.innerHTML = '<span class="nav-icon">▭</span>Video prompter<span class="rv-ext">↗</span>';
+      const review = navEl.querySelector('a[href="#review"]');
+      if (review) review.after(link); else navEl.append(link);
+    }
     const a = document.querySelector('#nav a[href="#review"]');
     if (!a || !db.loaded) return;
     const open = db.notes.filter(n => !n.parent_id && !n.resolved).length;
