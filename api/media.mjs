@@ -88,13 +88,13 @@ export async function GET(request) {
   let upstream;
   for (let attempt = 0; attempt < 2; attempt++) {
     let gtoken;
-    try { gtoken = await driveToken(token); } catch (error) { return text(503, error.message); }
+    try { gtoken = await driveToken(token); } catch (error) { console.error('[media] drive token:', error.message); return text(503, error.message); }
     upstream = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(row.drive_id)}?alt=media&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${gtoken}`, Range: `bytes=${start}-${end}` } });
     if (upstream.status !== 401) break;
     drive = { token: '', until: 0 }; // token expired early: get a fresh one once
   }
-  if (upstream.status === 404) return text(404, 'The file is no longer in Google Drive.');
-  if (!upstream.ok) return text(502, `Google Drive said ${upstream.status}.`);
+  if (upstream.status === 404) { console.error('[media] drive 404', row.drive_id); return text(404, 'Google Drive won’t hand this file to the hub (not found, or not created by the bridge).'); }
+  if (!upstream.ok) { const body = await upstream.text().catch(() => ''); console.error('[media] drive', upstream.status, body.slice(0, 300)); return text(502, `Google Drive said ${upstream.status}.`); }
 
   const headers = {
     'Content-Type': row.mime || upstream.headers.get('content-type') || 'application/octet-stream',

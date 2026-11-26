@@ -224,8 +224,13 @@
     player = root.querySelector('#rv-player');
     const msg = root.querySelector('.rv-player-msg');
     mediaReady().then(() => { player.src = src(v); }).catch(error => { msg.hidden = false; msg.textContent = error.message; });
-    player.addEventListener('error', () => {
+    player.addEventListener('error', async () => {
       msg.hidden = false;
+      // Ask the relay what went wrong so the message is specific.
+      try {
+        const res = await fetch(src(v), { headers: { Range: 'bytes=0-0' } });
+        if (!res.ok) { const why = (await res.text()).slice(0, 300); msg.innerHTML = `Couldn’t play this file: ${esc(why)}${v.link ? ` <a class="text-link" target="_blank" rel="noopener" href="${esc(v.link)}">Open it in Drive ↗</a>` : ''}`; return; }
+      } catch {}
       msg.innerHTML = /\.mov$/i.test(v.file_name || '') ? 'This browser can’t play this .mov file (it may be ProRes). Upload an H.264 .mp4 review copy, or <a class="text-link" target="_blank" rel="noopener" href="' + esc(v.link || '#') + '">open it in Drive ↗</a>.' : 'Couldn’t play this file. <a class="text-link" target="_blank" rel="noopener" href="' + esc(v.link || '#') + '">Open it in Drive ↗</a>';
     });
     player.addEventListener('loadedmetadata', () => {
