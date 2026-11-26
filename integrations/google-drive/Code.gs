@@ -20,6 +20,16 @@ function doGet() {
 function doPost(e) {
   try {
     const req = JSON.parse(e.postData.contents);
+
+    if (req.action === 'viewToken') {
+      // Only the hub's playback relay (on Vercel) knows VIEW_SECRET (Project Settings → Script
+      // properties). It uses this short-lived token to stream review cuts to signed-in members;
+      // browsers never see it, and it can only reach files this bridge created.
+      const secret = PropertiesService.getScriptProperties().getProperty('VIEW_SECRET');
+      if (!secret || String(req.secret || '') !== secret) return out_({ error: 'Not allowed.' });
+      return out_({ ok: true, token: ScriptApp.getOAuthToken(), expiresIn: 1800 });
+    }
+
     const role = hubRole_(req.token);
     if (!role) return out_({ error: 'Sign in to the hub first.' });
 

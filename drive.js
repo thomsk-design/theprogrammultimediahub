@@ -189,6 +189,7 @@ window.HubDrive = (() => {
         <li>Copy the latest code: <button class="btn small" data-drive-copy="/integrations/google-drive/Code.gs">Copy Code.gs</button></li>
         <li>Open your bridge project on <a class="text-link" href="https://script.google.com/home?authuser=support@nexttokin.ca" target="_blank" rel="noopener">script.google.com ↗</a> (as support@nexttokin.ca). In <b>Code.gs</b> press <b>Cmd+A</b>, then paste, then <b>Cmd+S</b>.</li>
         <li><b>Deploy → Manage deployments</b> → the pencil ✏️ → Version: <b>New version</b> → <b>Deploy</b>. The web address stays the same, so nothing changes here.</li>
+        <li><b>Once only, for Review room playback:</b> Project Settings (gear) → <b>Script properties</b> → <b>Add script property</b>. Property <code>VIEW_SECRET</code>, value: the <code>BRIDGE_VIEW_SECRET</code> from the hub’s Vercel project (house-sound → Settings → Environment Variables). Save.</li>
       </ol>`);
     }
     if (t.dataset.driveGuide !== undefined) return guide();

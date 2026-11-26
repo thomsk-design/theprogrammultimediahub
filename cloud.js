@@ -114,7 +114,7 @@
     try { sessionStorage.setItem('program-demo-role', demoRole); } catch {}
     document.body.classList.remove('cloud-wait');
     const here = location.hash.slice(1);
-    if (!here || ['home', 'login-talent', 'login-production'].includes(here) || (demoRole === 'talent' && here !== 'talent')) location.hash = demoRole === 'talent' ? 'talent' : 'overview';
+    if (!here || ['home', 'login-talent', 'login-production'].includes(here) || (demoRole === 'talent' && !['talent', 'review'].includes(here.split('/')[0]))) location.hash = demoRole === 'talent' ? 'talent' : 'overview';
     render();
     return true;
   }
@@ -231,6 +231,8 @@
   }
   window.HubCloud = {
     member: () => member,
+    client,
+    userId: () => userId,
     settings,
     async token() { if (!sb) return null; const { data: { session } } = await sb.auth.getSession(); return session ? session.access_token : null; },
     async setSetting(key, value) {
