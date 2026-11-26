@@ -79,7 +79,7 @@ async function driveToken(token) {
   if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(bridgeUrl.url)) throw new Error('The Google Drive bridge isn’t connected.');
   const res = await fetch(bridgeUrl.url, { method: 'POST', body: JSON.stringify({ action: 'viewToken', secret }), redirect: 'follow' });
   const data = await res.json().catch(() => ({ error: 'The Drive bridge didn’t answer.' }));
-  if (data.error || !data.token) throw new Error(/Unknown action/.test(data.error || '') ? 'Update the Drive bridge code (Connections → Google Drive → Update bridge code).' : (data.error || 'No Drive token.'));
+  if (data.error || !data.token) throw new Error(/Unknown action|Sign in to the hub/.test(data.error || '') ? 'The Google Drive bridge needs its update: Connections → Google Drive → Update bridge code (paste, deploy a New version, add the VIEW_SECRET script property).' : (/Not allowed/.test(data.error || '') ? 'The Drive bridge’s VIEW_SECRET script property is missing or doesn’t match BRIDGE_VIEW_SECRET in Vercel.' : (data.error || 'No Drive token.')));
   drive = { token: data.token, until: Date.now() + Math.max(60, (Number(data.expiresIn) || 1800) - 120) * 1000 };
   return drive.token;
 }
