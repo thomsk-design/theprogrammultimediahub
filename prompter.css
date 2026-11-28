@@ -94,3 +94,4 @@ textarea:focus{outline:2px solid var(--gold);outline-offset:1px}
 .lib-item{position:relative;display:inline-flex}
 .lib-remove{position:absolute;top:-7px;right:-7px;width:24px;height:24px;min-height:0!important;border-radius:50%!important;padding:0!important;display:grid;place-items:center;font-size:15px;line-height:1;background:#2a2620!important;color:var(--muted)!important}
 .lib-remove:hover{color:var(--ink)!important}
+.lib-help{flex-basis:100%;margin:2px 0 0!important}

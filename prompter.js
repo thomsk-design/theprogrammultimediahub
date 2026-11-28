@@ -737,7 +737,16 @@
       await whoAmI();
       saySave('');
       if (team.staff) doSave();
-    } catch (err) { saySave(/Invalid login/i.test(err.message || '') ? 'That email and password don’t match your hub account.' : 'Couldn’t sign in: ' + (err.message || err)); }
+ } catch (err) { saySave(/Invalid login/i.test(err.message || '') ? 'That email and password don’t match your hub account. Check for typos, or tap Forgot password.' : 'Couldn’t sign in: ' + (err.message || err)); }
+  });
+  $('libForgot').addEventListener('click', async () => {
+    const email = $('libEmail').value.trim().toLowerCase();
+    if (!email) { saySave('Type your hub email first, then tap Forgot password.'); $('libEmail').focus(); return; }
+    try {
+      const { error } = await (await sbClient()).auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/' });
+      if (error) throw error;
+      saySave(`If ${email} is on the team, a reset link is on its way. Set a new password from the email, then sign in here.`);
+    } catch (err) { saySave(/rate limit/i.test(err.message || '') ? 'Too many reset emails. Wait a minute and try again.' : 'Couldn’t send the reset email: ' + (err.message || err)); }
   });
   $('libOut').addEventListener('click', async () => { try { await (await sbClient()).auth.signOut(); } catch {} team.user = null; team.staff = false; showAccount(); renderLib(); });
 
