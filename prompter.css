@@ -79,3 +79,18 @@ textarea:focus{outline:2px solid var(--gold);outline-offset:1px}
 .gong-row input{flex:1}
 .gong-row button{background:#15130f;color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:6px 14px;min-height:36px;font-weight:600}
 .gong-row button:disabled,.gong-row input:disabled{opacity:.4}
+.lib-save{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 16px;background:#15130f}
+.lib-save-row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.lib-save label{display:flex!important;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);margin:0}
+.lib-save label:first-child{flex:1 1 220px}
+.lib-save input,.lib-save select{background:#0e0d0a;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font:inherit;font-size:15px;min-height:42px}
+.lib-go,.lib-login button{background:var(--gold);color:#15130f;border:0;border-radius:999px;padding:0 18px;min-height:42px;font-weight:700}
+.lib-go:disabled{opacity:.5}
+.lib-login{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.lib-login input{flex:1 1 160px}
+.lib-save p{margin:8px 0 0}
+.lib-save p:empty{display:none}
+.text-link{background:none;border:0;color:var(--gold);padding:0;font:inherit;text-decoration:underline;cursor:pointer}
+.lib-item{position:relative;display:inline-flex}
+.lib-remove{position:absolute;top:-7px;right:-7px;width:24px;height:24px;min-height:0!important;border-radius:50%!important;padding:0!important;display:grid;place-items:center;font-size:15px;line-height:1;background:#2a2620!important;color:var(--muted)!important}
+.lib-remove:hover{color:var(--ink)!important}
