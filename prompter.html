@@ -29,6 +29,20 @@
         <button type="button" id="pick">Choose a file</button>
         <p class="small muted" id="dropMsg">Pauses written in the script, like [SILENCE: ~20 seconds], (pause) or BEAT, become prompter pauses. Titles and section headings are left out.</p>
       </div>
+      <div class="lib-save" id="libSave" hidden>
+        <div class="lib-save-row">
+          <label>Title <input id="libTitle" type="text" maxlength="120" autocomplete="off"></label>
+          <label>Section <select id="libSection"><option value="week">Week videos</option><option value="marketing">Marketing videos</option></select></label>
+          <button type="button" class="lib-go" id="libGo">Add to library</button>
+        </div>
+        <form id="libLogin" class="lib-login" hidden>
+          <input id="libEmail" type="email" autocomplete="email" placeholder="Hub email" required>
+          <input id="libPass" type="password" autocomplete="current-password" placeholder="Password" required>
+          <button type="submit">Sign in and add</button>
+        </form>
+        <p class="small muted" id="libAccount" hidden><span id="libWho"></span> <button type="button" class="text-link" id="libOut">Sign out</button></p>
+        <p class="small" id="libMsg" role="status"></p>
+      </div>
       <div class="library" id="library" aria-label="Program scripts"></div>
       <label for="script">Script</label>
       <textarea id="script" spellcheck="true" placeholder="Paste the script here.&#10;&#10;Add a pause anywhere with [Pause 5] or [Silence: 30 seconds]. [Breath] holds about a second."></textarea>

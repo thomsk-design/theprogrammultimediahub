@@ -526,21 +526,54 @@
   labels();
 
   // ---------- Program scripts ----------
-  const lib = window.PROMPTER_SCRIPTS || [];
+  // Built-in scripts come from prompter-scripts.js. Scripts uploaded by the team live in Supabase
+  // (program_prompter_scripts), are cached on this device for shoot days without internet, and
+  // join the Week or Marketing section. An upload with a built-in script's id (e.g. w2d1) replaces it.
+  const BUILTIN = window.PROMPTER_SCRIPTS || [];
+  const SECTIONS = { week: 'Week videos', marketing: 'Marketing videos' };
+  const SB_URL = 'https://etukrfqlrhiepsedrvzr.supabase.co';
+  const SB_KEY = 'sb_publishable_QV-frUgCkQ02FEd_8_C8wg_Bnfuvid3'; // publishable: access is enforced by row-level security
+  const CACHE = 'prompter-uploads-v1';
+  let uploads = [];
+  try { uploads = JSON.parse(localStorage.getItem(CACHE) || '[]'); } catch {}
+  let lib = [];
+  const fmtDate = iso => new Date(iso).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' });
+  const sectionOf = sc => sc.section || (/market/i.test(sc.group || '') ? 'marketing' : 'week');
+  function weekKey(sc) {
+    const m = (sc.id || '').match(/^w(\d+)d(\d+)$/) || (sc.title || '').match(/Week\s*(\d+)\D+Day\s*(\d+)/i);
+    return m ? Number(m[1]) * 1000 + Number(m[2]) : 1e6;
+  }
+  function buildLib() {
+    const up = uploads.map(u => ({ id: u.id, section: u.section, group: SECTIONS[u.section], title: u.title, sub: u.sub || (u.section === 'week' ? 'Core video' : 'Marketing video'),
+      updated: fmtDate(u.updated_at), text: u.body, uploaded: true, by: u.created_by_name, sort: u.sort_key }));
+    const ids = new Set(up.map(u => u.id));
+    const all = BUILTIN.filter(b => !ids.has(b.id)).map(b => ({ ...b, section: sectionOf(b) })).concat(up);
+    const order = ['week', 'marketing'];
+    lib = all.map((sc, n) => ({ sc, n })).sort((a, b) => {
+      const s = order.indexOf(a.sc.section) - order.indexOf(b.sc.section);
+      if (s) return s;
+      if (a.sc.section === 'week') { const k = (a.sc.sort || weekKey(a.sc)) - (b.sc.sort || weekKey(b.sc)); if (k) return k; }
+      return (a.sc.uploaded ? 1 : 0) - (b.sc.uploaded ? 1 : 0) || a.n - b.n;
+    }).map(x => x.sc);
+    for (const sc of lib) sc.group = SECTIONS[sc.section];
+  }
   function markLoaded() {
     for (const b of document.querySelectorAll('#library [data-id]')) b.classList.toggle('on', lib.find(x => x.id === b.dataset.id)?.text === ui.script.value);
+    showSave();
   }
   function load(id) {
     const sc = lib.find(x => x.id === id);
-    if (!sc) return;
+    if (!sc) return false;
     const cur = ui.script.value.trim();
-    if (cur && cur !== sc.text && !lib.some(x => x.text === ui.script.value) && !confirm('Replace the script that’s in the box with ' + sc.title + '?')) return;
+    if (cur && cur !== sc.text && !lib.some(x => x.text === ui.script.value) && !confirm('Replace the script that’s in the box with ' + sc.title + '?')) return true;
     ui.script.value = sc.text;
     persist(); labels(); markLoaded();
     ui.script.scrollTop = 0;
-    $('saved').textContent = `${sc.title} loaded · script updated ${sc.updated}. Edits are saved on this iPad.`;
+    $('saved').textContent = `${sc.title} loaded · script ${sc.uploaded ? 'uploaded' : 'updated'} ${sc.updated}. Edits are saved on this iPad.`;
+    return true;
   }
-  if (lib.length) {
+  function renderLib() {
+    buildLib();
     const box = $('library');
     box.innerHTML = '';
     let group = null;
@@ -549,23 +582,174 @@
         group = sc.group;
         const h = document.createElement('div');
         h.className = 'lib-head';
-        h.textContent = group || 'Program scripts';
+        h.textContent = group;
         box.append(h);
       }
+      const item = document.createElement('span');
+      item.className = 'lib-item';
       const b = document.createElement('button');
       b.type = 'button'; b.dataset.id = sc.id;
-      b.innerHTML = `${sc.title}<small>${sc.sub}${sc.updated ? ' · ' + sc.updated : ''}</small>`;
+      b.append(sc.title);
+      const small = document.createElement('small');
+      small.textContent = `${sc.sub}${sc.updated ? ' · ' + (sc.uploaded ? 'uploaded ' : '') + sc.updated : ''}`;
+      b.append(small);
       b.addEventListener('click', () => load(sc.id));
-      box.append(b);
+      item.append(b);
+      if (sc.uploaded && team.staff) {
+        const x = document.createElement('button');
+        x.type = 'button'; x.className = 'lib-remove'; x.title = `Remove ${sc.title} from the library`; x.setAttribute('aria-label', x.title);
+        x.textContent = '×';
+        x.addEventListener('click', () => removeUpload(sc));
+        item.append(x);
+      }
+      box.append(item);
     }
     markLoaded();
-    ui.script.addEventListener('input', markLoaded);
-    // A link such as /prompter?script=w2d1 opens with that script loaded.
+  }
+  ui.script.addEventListener('input', markLoaded);
+
+  // ---------- team sign-in (only needed to add or remove scripts) ----------
+  const team = { sb: null, user: null, name: '', staff: false };
+  async function sbClient() {
+    if (!team.sb) {
+      const mod = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+      team.sb = mod.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+    }
+    return team.sb;
+  }
+  async function whoAmI() {
+    const sb = await sbClient();
+    const { data: { session } } = await sb.auth.getSession();
+    team.user = session?.user || null; team.staff = false; team.name = '';
+    if (team.user) {
+      const { data } = await sb.from('program_members').select('role, display_name, email').eq('user_id', team.user.id).maybeSingle();
+      team.staff = !!data && ['admin', 'producer'].includes(data.role);
+      team.name = data?.display_name || data?.email || team.user.email;
+    }
+    showAccount(); renderLib();
+  }
+  // Signed in to the hub in this browser already? Pick that up quietly.
+  try { if (Object.keys(localStorage).some(k => /^sb-.*-auth-token$/.test(k))) whoAmI().catch(() => {}); } catch {}
+
+  async function refreshUploads() {
+    try {
+      const r = await fetch(`${SB_URL}/rest/v1/program_prompter_scripts?select=*&order=created_at`, { headers: { apikey: SB_KEY }, cache: 'no-store' });
+      if (!r.ok) throw new Error(r.status);
+      uploads = await r.json();
+      try { localStorage.setItem(CACHE, JSON.stringify(uploads)); } catch {}
+      renderLib();
+      return true;
+    } catch { return false; }
+  }
+
+  // ---------- add to library ----------
+  const save = $('libSave');
+  function guess(fileName, removed, text) {
+    const hay = [fileName || '', ...(removed || []), (text || '').slice(0, 200)].join(' \n ').replace(/_/g, ' ');
+    const wd = hay.match(/\bW(?:eek|k)?\s*-?\s*(\d{1,2})\s*[-·,.\s]*D(?:ay)?\s*-?\s*(\d{1,3})\b/i);
+    const abs = hay.match(/\bDay\s*(\d{1,3})\b/i);
+    if (/market|promo|ad\b|advert|trailer|sales|landing/i.test(hay) && !wd) {
+      const base = (fileName || 'Marketing script').replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+      return { section: 'marketing', title: base.replace(/^marketing\s+page\s+script\s*/i, 'Marketing page · Script ').replace(/\s·\s*$/, '') };
+    }
+    if (wd || abs) {
+      let w = wd ? Number(wd[1]) : Math.ceil(Number(abs[1]) / 7), d = wd ? Number(wd[2]) : ((Number(abs[1]) - 1) % 7) + 1;
+      let day = abs ? Number(abs[1]) : (w - 1) * 7 + d;
+      if (wd && d > 7) { day = d; d = ((d - 1) % 7) + 1; }
+      return { section: 'week', title: `Week ${w} · Day ${day}`, id: `w${w}d${d}`, sort: w * 1000 + d, sub: /\baudio\b/i.test(hay) ? 'Audio' : 'Core video' };
+    }
+    const base = (fileName || '').replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+    return { section: 'week', title: base || 'New script' };
+  }
+  let pending = null; // what the last import suggested
+  function showSave() {
+    const text = ui.script.value.trim();
+    const isLib = lib.some(x => x.text === ui.script.value);
+    save.hidden = !text || isLib;
+    if (save.hidden) return;
+    if (!$('libTitle').value) {
+      const g = pending || guess('', [], text);
+      $('libTitle').value = g.title; $('libSection').value = g.section;
+    }
+  }
+  function slug(t) { return t.toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g, '').replace(/[\s_]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'script'; }
+  function idFor(section, title) {
+    const same = lib.find(x => x.section === section && x.title.toLowerCase().replace(/\s+/g, ' ') === title.toLowerCase().replace(/\s+/g, ' '));
+    if (same) return { id: same.id, sort: same.sort || 0 };
+    const m = title.match(/Week\s*(\d+)\D+Day\s*(\d+)/i);
+    if (section === 'week' && m) { const w = Number(m[1]), day = Number(m[2]); const d = day > 7 ? ((day - 1) % 7) + 1 : day; return { id: `w${w}d${d}`, sort: w * 1000 + d }; }
+    return { id: (section === 'marketing' ? 'mkt-' : 'up-') + slug(title), sort: 0 };
+  }
+  function saySave(t) { $('libMsg').textContent = t; }
+  function showAccount() {
+    const acct = $('libAccount'), form = $('libLogin');
+    if (team.user) {
+      acct.hidden = false; form.hidden = true;
+      $('libWho').textContent = team.staff ? `Signed in as ${team.name}.` : `Signed in as ${team.name}, who can’t add scripts. Ask an admin.`;
+    } else { acct.hidden = true; }
+  }
+  async function doSave() {
+    const title = $('libTitle').value.trim(), section = $('libSection').value, body = ui.script.value.trim();
+    if (!title) { saySave('Give the script a title first.'); $('libTitle').focus(); return; }
+    if (!team.user) { $('libLogin').hidden = false; saySave('Sign in with your hub account to add it to the library.'); $('libEmail').focus(); return; }
+    if (!team.staff) { saySave('Only producers and admins can add scripts.'); return; }
+    const { id, sort } = idFor(section, title);
+    const existing = lib.find(x => x.id === id);
+    if (existing && !confirm(existing.uploaded ? `Replace the uploaded ${existing.title} (${existing.updated}) with this one?` : `This replaces the built-in ${existing.title} in the list. Continue?`)) return;
+    $('libGo').disabled = true; saySave('Saving…');
+    try {
+      const sb = await sbClient();
+      const row = { id, section, title, sub: (pending && pending.section === section && pending.sub) || (section === 'week' ? 'Core video' : 'Marketing video'), body, file_name: pending?.fileName || null, sort_key: sort };
+      const { data, error } = await sb.from('program_prompter_scripts').upsert(row).select().single();
+      if (error) throw error;
+      uploads = uploads.filter(u => u.id !== data.id).concat(data);
+      try { localStorage.setItem(CACHE, JSON.stringify(uploads)); } catch {}
+      pending = null; $('libTitle').value = '';
+      renderLib();
+      saySave('');
+      $('saved').textContent = `${title} added to ${SECTIONS[section]}. It’s on every device that opens the prompter. Link: ${location.origin}/prompter?script=${id}`;
+      msg.textContent = `${title} is in the library under ${SECTIONS[section]}.`;
+    } catch (e) {
+      saySave('Couldn’t save: ' + (e.message || e));
+    } finally { $('libGo').disabled = false; }
+  }
+  async function removeUpload(sc) {
+    const builtin = BUILTIN.find(b => b.id === sc.id);
+    if (!confirm(`Remove ${sc.title} (uploaded ${sc.updated}) from the library on every device?${builtin ? ' The original built-in version comes back.' : ''}`)) return;
+    try {
+      const sb = await sbClient();
+      const { error } = await sb.from('program_prompter_scripts').delete().eq('id', sc.id);
+      if (error) throw error;
+      uploads = uploads.filter(u => u.id !== sc.id);
+      try { localStorage.setItem(CACHE, JSON.stringify(uploads)); } catch {}
+      renderLib();
+    } catch (e) { alert('Couldn’t remove it: ' + (e.message || e)); }
+  }
+  $('libGo').addEventListener('click', doSave);
+  $('libLogin').addEventListener('submit', async e => {
+    e.preventDefault();
+    saySave('Signing in…');
+    try {
+      const sb = await sbClient();
+      const { error } = await sb.auth.signInWithPassword({ email: $('libEmail').value.trim().toLowerCase(), password: $('libPass').value });
+      if (error) throw error;
+      $('libPass').value = '';
+      await whoAmI();
+      saySave('');
+      if (team.staff) doSave();
+    } catch (err) { saySave(/Invalid login/i.test(err.message || '') ? 'That email and password don’t match your hub account.' : 'Couldn’t sign in: ' + (err.message || err)); }
+  });
+  $('libOut').addEventListener('click', async () => { try { await (await sbClient()).auth.signOut(); } catch {} team.user = null; team.staff = false; showAccount(); renderLib(); });
+
+  renderLib();
+  // A link such as /prompter?script=w2d1 opens with that script loaded.
+  {
     const q = new URLSearchParams(location.search), want = q.get('script');
     // ?practice=1 opens reading normally (not mirrored); ?glass=1 forces the mirror back on.
     if (q.has('practice')) { ui.mirror.checked = false; persist(); }
     if (q.has('glass')) { ui.mirror.checked = true; persist(); }
-    if (want) load(want.toLowerCase());
+    const loaded = want ? load(want.toLowerCase()) : false;
+    refreshUploads().then(ok => { if (ok && want && !loaded) load(want.toLowerCase()); });
   }
 
   // ---------- import a Word / PDF / text script ----------
@@ -578,12 +762,15 @@
       const cur = ui.script.value.trim();
       if (cur && !lib.some(x => x.text === ui.script.value) && !confirm(`Replace the script that’s in the box with ${r.title}?`)) { msg.textContent = 'Kept the script that was already in the box.'; return; }
       ui.script.value = r.text;
+      pending = { ...guess(file.name, r.removed, r.text), fileName: file.name };
+      $('libTitle').value = pending.title; $('libSection').value = pending.section;
       persist(); labels(); markLoaded();
       ui.script.scrollTop = 0;
       const p = r.pauses ? `${r.pauses} pause${r.pauses > 1 ? 's' : ''} added (${Math.round(r.pauseSecs)} s in all)` : 'No pauses were written in it; add any with the buttons below';
       const left = r.removed.length ? ` Left out: ${r.removed.slice(0, 6).join(' · ')}${r.removed.length > 6 ? ' …' : ''}.` : '';
       msg.innerHTML = '';
-      msg.append(Object.assign(document.createElement('b'), { textContent: `${r.title} loaded. ` }), `${p}. Check it over before the take.${left}`);
+      const twin = lib.find(x => x.text === ui.script.value);
+      msg.append(Object.assign(document.createElement('b'), { textContent: `${r.title} loaded. ` }), `${p}. ${twin ? `It matches ${twin.title}, already in the library.` : 'Check it over before the take, then add it to the library below to have it on every device.'}${left}`);
       $('saved').textContent = `${r.title} imported. Edits are saved on this iPad.`;
     } catch (e) {
       msg.textContent = e && e.message ? e.message : 'Could not read that file.';
